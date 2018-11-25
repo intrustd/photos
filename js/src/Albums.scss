@@ -1,0 +1,22 @@
+@keyframes ph-card-anim {
+    0% { transform: translateY(10px); opacity: 0 }
+    100% { transform: none; opacity: 1 }
+}
+
+.ph-album-card {
+    animation: ph-card-anim;
+    animation-iteration-count: 1;
+    animation-duration: 1s;
+    animation-fill-mode: forwards;
+    opacity: 0;
+
+    min-width: 200px;
+    margin: 10px;
+}
+
+@for $i from 1 to 20 {
+    .ph-album-card:nth-child(#{$i}) {
+        $delay: $i * 0.1;
+        animation-delay: #{$delay}s;
+    }
+}

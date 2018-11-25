@@ -1,0 +1,132 @@
+@import 'uikit/src/scss/variables-theme.scss';
+
+.ph-gallery-image {
+    min-width: 300px;
+    min-height: 300px;
+}
+
+@keyframes grow-card {
+    0% { transform: scaleXY(0); opacity: 0 }
+    100% { transform: scaleXY(1); opacity: 1 }
+}
+
+.ph-gallery-image-card {
+    cursor: pointer;
+    margin: 10px;
+    width: 300px;
+    height: 300px;
+    padding: 0;
+
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+
+    transition: opacity 1s, transform 1s;
+
+    overflow: hidden;
+
+    box-sizing: border-box;
+
+    .uk-overlay {
+        padding: 10px;
+
+        opacity: 0;
+        transform: translateY(30px);
+        transition: opacity 0.5s, transform 0.5s;
+    }
+
+    &:hover, &.ph-gallery-image-card--editing, &.ph-gallery-image-card--saving {
+        border: 1px solid $global-primary-background;
+
+        .uk-overlay {
+            opacity: 1;
+            transform: none;
+        }
+    }
+}
+
+.ph-gallery-image-card--loading {
+    opacity: 0;
+    transform: scale(0);
+}
+
+.ph-gallery-image-card--loaded {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.ph-gallery {
+    margin: 0 25px;
+}
+
+.ph-image-meta {
+    font-size: 10pt;
+    margin-bottom: 2px;
+}
+
+.ph-image-description {
+    padding: 4px;
+
+    resize: none;
+    width: 100%;
+
+    display: block;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    transition: border 0.2s;
+
+    cursor: text;
+
+    .ph-edit-btn {
+        opacity: 0;
+        transition: opacity 0.2s;
+    }
+
+    &:hover {
+        .ph-edit-btn {
+            opacity: 1;
+        }
+        border-color: #ccc;
+    }
+}
+
+textarea.ph-image-description {
+    background: transparent;
+    color: white;
+}
+
+@keyframes fade-slides-in {
+    0% { opacity: 0 }
+    100% { opacity: 1 }
+}
+
+.slideshow {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: black;
+
+    animation: fade-slides-in;
+    animation-fill-mode: forwards;
+    animation-duration: 0.75s;
+    animation-iteration-count: 1;
+
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+
+    .uk-navbar {
+        max-width: 400px;
+        position: fixed;
+        margin: 0 auto;
+        bottom: 50px;
+    }
+
+    .slide {
+        max-width: 100vw;
+        max-height: 100vh;
+    }
+}

@@ -1,0 +1,33 @@
+@import url('https://fonts.googleapis.com/css?family=Roboto');
+
+.ph-uploads-indicator {
+    position: fixed;
+    left: 0;
+    bottom: 0;
+    margin: 5px;
+    padding: 5px;
+    background-color: white;
+    border: 1px solid #ccc;
+    list-style: none;
+    min-width: 300px;
+    display: none;
+}
+
+.ph-uploads-indicator--active {
+    display: block;
+}
+
+
+.ph-uploads-indicator li {
+    text-align: left;
+
+    animation: upload-fade-up;
+    animation-duration: 0.2s;
+    animation-fill-mode: forwards;
+    animation-iteration-count: 1;
+}
+
+@keyframes upload-fade-up {
+    0% { transform: translateY(10px); opacity: 0; }
+    100% { transform: none; opacity: 1; }
+}

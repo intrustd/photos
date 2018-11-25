@@ -1,0 +1,12 @@
+package-lock.json
+*~
+build
+dist
+*.pyc
+*.so
+dist
+node_modules
+Makefile
+*.egg-info
+result.json
+result
