@@ -6,7 +6,7 @@ in {
             enabled = 1;
             hidden = false;
             description = "Kite Photos App";
-            nixexrinput = "kite";
+            nixexprinput = "kite";
             nixexprpath = "hydra/build-app.nix";
             checkinterval = 300;
             schedulingshares = 50;
