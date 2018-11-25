@@ -11,7 +11,7 @@ in {
             checkinterval = 300;
             schedulingshares = 50;
             enableemail = true;
-            enableoverride = "";
+            emailoverride = "";
             keepnr = 3;
             inputs = {
               nixpkgs = { type = "git"; value = "git://github.com/kitecomputing/nixpkgs.git kite"; emailresponsible = true; };
