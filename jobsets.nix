@@ -7,15 +7,15 @@ in {
             hidden = false;
             description = "Kite Photos App";
             nixexprinput = "kite";
-            nixexprpath = "hydra/build-app.nix";
+            nixexprpath = "nix/build-hydra.nix";
             checkinterval = 300;
             schedulingshares = 50;
             enableemail = true;
-            emailoverride = "";
+            emailoverrideb
             keepnr = 3;
             inputs = {
               nixpkgs = { type = "git"; value = "git://github.com/kitecomputing/nixpkgs.git kite"; emailresponsible = true; };
-              kite = { type = "git"; value = "git://github.com/kitecomputing/kite-system.git"; emailresponsible = true; };
+              kite = { type = "git"; value = "git://github.com/kitecomputing/kite.git"; emailresponsible = true; };
               src = { type = "git"; value = "git://github.com/kitecomputing/photos.git"; emailresponsible = true; };
             };
           };
