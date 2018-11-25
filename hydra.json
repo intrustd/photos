@@ -10,7 +10,7 @@
     "emailoverride": "hi@flywithkite.com",
     "keepnr": 3,
     "inputs": {
-        "src": { "type": "git", "value": "git://github.com/kitecomputing/kite-system.git" },
+        "src": { "type": "git", "value": "git://github.com/kitecomputing/kite-system.git", "emailresponsible": true },
         "nixpkgs": { "type": "git", "value": "git://github.com/NixOS/nixpkgs.git release-18.09", "emailresponsible": false }
     }
 }
