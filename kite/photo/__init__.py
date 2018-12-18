@@ -8,6 +8,9 @@ import os
 
 from .util import get_photo_dir
 from .schema import session_scope, Photo
+from .perms import perms, CommentAllPerm, ViewAllPerm, GalleryPerm, UploadPerm, ViewPerm, CommentPerm
+
+from kite.permissions import Placeholder, mkperm
 
 def sha256_sum_file(fp):
     h = hashlib.sha256()
@@ -55,6 +58,8 @@ def image(image_hash=None):
             return abort(404)
 
 @app.route('/image', methods=['GET', 'POST'])
+@perms.require({ 'GET': GalleryPerm,
+                 'POST': UploadPerm })
 def upload():
     if request.method == 'GET':
         with session_scope() as session:
@@ -84,6 +89,8 @@ def upload():
             return jsonify(photo.to_json())
 
 @app.route('/image/<image_hash>/description', methods=['GET', 'PUT'])
+@perms.require({ 'GET': mkperm(ViewPerm, photo_id=Placeholder('image_hash')),
+                 'PUT': mkperm(CommentPerm, photo_id=Placeholder('image_hash')) })
 def image_description(image_hash=None):
     if image_hash is None:
         return abort(404)
@@ -100,7 +107,7 @@ def image_description(image_hash=None):
             photo.description = request.data.decode("utf-8")
             return jsonify({})
 
-def main(debug = False):
+def main(debug = False, port=80):
     print("Starting server")
 
     if debug:
@@ -110,7 +117,7 @@ def main(debug = False):
         def index(path=''):
             return send_from_directory(bundle, path)
 
-    app.run(host='0.0.0.0', port=50051)
+    app.run(host='0.0.0.0', port=port)
 
 if __name__ == "__main__":
     main()

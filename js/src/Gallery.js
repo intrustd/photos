@@ -2,12 +2,40 @@ import React from 'react';
 
 import Navbar from './Navbar.js';
 
+import { mintToken } from 'stork-js';
 import { KiteImage } from 'stork-js/src/react.js';
 import { KITE_URL } from './PhotoUrl.js';
 
 import { Route, Link, withRouter } from 'react-router-dom';
 
 import './Gallery.scss';
+
+import { Set } from 'immutable';
+
+function makeAbsoluteUrl(hash, query) {
+    var uri = new URL(location.href)
+    uri.hash = hash
+    uri.search = query
+    return uri.toString()
+}
+
+function copyStringToClipboard (str) {
+   // Create new element
+   var el = document.createElement('textarea');
+   // Set value (string to be copied)
+   el.value = str;
+   // Set non-editable to avoid focus and move outside of view
+   el.setAttribute('readonly', '');
+   el.style = {position: 'absolute', left: '-9999px'};
+   document.body.appendChild(el);
+   // Select text inside element
+   el.select();
+   // Copy text to clipboard
+   document.execCommand('copy');
+   // Remove temporary element
+    document.body.removeChild(el);
+    console.log("Copy string to clipboard", str)
+}
 
 const E = React.createElement;
 class ImageTile extends React.Component {
@@ -46,7 +74,7 @@ class ImageTile extends React.Component {
     }
 
     render () {
-        var description, editingClass = '', loadingClass, savingIcon
+        var description, editingClass = '', loadingClass = '', selectedClass = '', savingIcon
         var editBtn =
             E('span', {className: 'fa fa-fw fa-pencil ph-edit-btn'})
 
@@ -80,7 +108,10 @@ class ImageTile extends React.Component {
         else
             loadingClass = 'ph-gallery-image-card--loading';
 
-        return E('div', {className: `uk-card uk-card-default ph-gallery-image-card ${editingClass} ${loadingClass}`,
+        if ( this.props.selected )
+            selectedClass = 'ph-gallery-image-card--selected';
+
+        return E('div', {className: `uk-card uk-card-default ph-gallery-image-card ${editingClass} ${loadingClass} ${selectedClass}`,
                          onClick: () => { this.onClick() }},
                  E(KiteImage, {src: `${KITE_URL}/image/${this.props.photo.id}`,
                                onFirstLoad: () => {
@@ -88,6 +119,10 @@ class ImageTile extends React.Component {
                                               200 * this.props.index)
                                },
                                className: 'ph-gallery-image uk-card-media-top'}),
+                 E('div', { className: 'ph-image-selector',
+                            onClick: (e) => { e.stopPropagation(); this.props.onSelect() } },
+                   E('div', {className: 'ph-image-selector-check'},
+                     E('span', {className: 'ph-image-selector-box'}))),
                  E('div', {className: 'uk-overlay uk-overlay-primary uk-light uk-position-bottom'},
                    E('p', {className: 'ph-image-meta'},
                      E('a', { className: 'uk-float-right', href: '#',
@@ -197,18 +232,38 @@ export default class Gallery extends React.Component {
         super()
         this.state = {
             slideshow: false,
-            curSlideIx: 0
+            curSlideIx: 0,
+            selected: Set()
         }
     }
 
     render() {
-        console.log("Render loc", this.props.location)
         return [
             E(Route, { path: '/slideshow/:imageId',
                        render: this.renderSlideshow.bind(this) }),
             E(Route, { path: '/', exact: true,
                        render: this.renderGallery.bind(this) })
         ]
+    }
+
+    notifyCopy() {
+        if ( this.state.copied )
+            cancelTimeout(this.state.copied);
+
+        var copied = setTimeout(() => { this.setState({copied: null}) }, 5000);
+        this.setState({copied})
+    }
+
+    shareSelected() {
+        console.log("Request to share selected");
+        var perms = this.state.selected.toArray().map((img) => `kite+perm://photos.flywithkite.com/view/${img}`)
+
+        perms.push('kite+perm://photos.flywithkite.com/gallery')
+        perms.push('kite+perm://admin.flywithkite.com/login')
+
+        mintToken(perms,  { format: 'query' })
+            .then((tok) => makeAbsoluteUrl('#/', tok))
+            .then((url) => { copyStringToClipboard(url); this.notifyCopy() })
     }
 
     renderSlideshow(thisProps) {
@@ -222,7 +277,7 @@ export default class Gallery extends React.Component {
     }
 
     renderGallery () {
-        var gallery, galleryClass = '';
+        var gallery, galleryClass = '', hasSelection = !this.state.selected.isEmpty();
 
         if ( this.props.images === undefined ) {
             gallery = E('div', { className: 'ph-gallery-loading' }, 'Loading')
@@ -234,6 +289,17 @@ export default class Gallery extends React.Component {
             gallery = this.props.images.map(
                 (img, index) =>
                     E(ImageTile, { photo: img, key: img.id, index: index,
+                                   selected: this.state.selected.contains(img.id),
+                                   onSelect: () => {
+                                       var { selected } = this.state
+
+                                       if ( selected.contains(img.id) )
+                                           selected = selected.delete(img.id)
+                                       else
+                                           selected = selected.add(img.id)
+
+                                       this.setState({ selected })
+                                   },
                                    onActivated: () => {
                                        history.push(`${match.url}slideshow/${img.id}`)
                                    },
@@ -243,7 +309,26 @@ export default class Gallery extends React.Component {
             )
         }
 
+        var notification
+
+        if ( this.state.copied ) {
+            notification = E('div', { className: 'copy-notification-container' },
+                             E('div', { className: 'copy-notification' },
+                               E('i', { className: 'copy-notification-close',
+                                        onClick: () => { this.setState({closed: null}) } }),
+                               'Link copied'))
+        }
+
         return E('div', {className: `uk-flex uk-flex-wrap uk-flex-center ph-gallery ${galleryClass}`, 'uk-grid': 'uk-grid'},
-                 gallery)
+                 notification,
+                 gallery,
+
+                 E('div', {className: `ph-gallery-selected-indicator ${hasSelection ? '' : 'ph-gallery-selected-indicator--empty'}`},
+                   E('div', {className: 'ph-gallery-selected-indicator-label'},
+                     `${this.state.selected.count()} images selected`,
+                     E('div', {className: 'ph-gallery-images-toolbar'},
+                       E('i', {className: 'ph-gallery-images-toolbtn fa fa-fw fa-link',
+                               onClick: this.shareSelected.bind(this) }))),
+                   E('div', {className: 'ph-gallery-selected-indicator-list'}, 'images')))
     }
 }

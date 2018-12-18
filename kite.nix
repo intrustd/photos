@@ -29,11 +29,11 @@ let grpc-io-tools = ps: ps.buildPythonPackage rec {
       pname = "kite-photo";
       version = "0.1.0";
 
-      src = ./.;
+      src = ./dist/kite-photos-0.1.0.tar.gz;
 
       doCheck = false;
 
-      propagatedBuildInputs = with python.pkgs; [ flask sqlalchemy ];
+      propagatedBuildInputs = with python.pkgs; [ flask sqlalchemy requests ];
 
       meta = {
         homepage = "https://flywithkite.com";
@@ -59,11 +59,13 @@ in {
     startExec = ''
       exec ${photo-app}/bin/photos
     '';
-
-    environment = {
-      KITEPHOTOS = "/kite/";
-    };
   };
+
+  kite.environment = {
+    KITEPHOTOS = "/kite/";
+  };
+
+  kite.permsHook = "${photo-app}/bin/photo-perms";
 
   kite.permissions = [
     { name = "comment";
@@ -78,9 +80,13 @@ in {
     { name = "gallery";
       description = "View all photos"; }
 
-    { regex = "view/(?P<photoId>[A-Fa-f0-9]{32})";
+    { name = "gallery/minimal";
+      description = "View only the set of photos shared";
+      dynamic = true; }
+
+    { regex = "view/(?P<photo_id>[A-Fa-f0-9]{64})";
       description = "View some photos";
-      verifyCmd = "${photo-app}/bin/verify-photo-perm {photoId}"; }
+      dynamic = true; }
   ];
 
 #  kite.startHook = ''

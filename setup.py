@@ -9,6 +9,6 @@ setup(
     packages=find_packages(),
     install_requires=["Flask>=0.2"],
     entry_points={
-        'console_scripts': [ 'photos=kite.photo:main' ]
+        'console_scripts': [ 'photos=kite.photo:main', 'photo-perms=kite.photo.perms:verify' ]
     }
 )

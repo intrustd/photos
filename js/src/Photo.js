@@ -23,9 +23,13 @@ import { HashRouter as Router,
 import './photos.svg';
 
 installKite({permissions: [ "kite+perm://photos.flywithkite.com/comment",
+                            "kite+perm://photos.flywithkite.com/comment/transfer",
 			    "kite+perm://photos.flywithkite.com/upload",
 			    "kite+perm://photos.flywithkite.com/view",
-			    "kite+perm://photos.flywithkite.com/gallery" ]})
+                            "kite+perm://photos.flywithkite.com/view/transfer",
+			    "kite+perm://photos.flywithkite.com/gallery",
+                            "kite+perm://photos.flywithkite.com/gallery/transfer",
+                            "kite+perm://admin.flywithkite.com/login/transfer" ]})
 
 class PhotoUpload {
     constructor(key, formData) {

@@ -23,7 +23,6 @@ class Photo(Base):
                  'created': datetime_json(self.created_on),
                  'modified': datetime_json(self.modified_on) }
 
-print("Using file", get_photo_dir(".photos.db"))
 engine = create_engine("sqlite:///" + get_photo_dir(".photos.db", absolute=True))
 database = Base.metadata.create_all(engine)
 
