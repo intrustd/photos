@@ -43,6 +43,7 @@ def albums():
                      { "name": "Album 2", "id": "album10"} ])
 
 @app.route('/image/<image_hash>')
+@perms.require(mkperm(ViewPerm, photo_id=Placeholder('image_hash')))
 def image(image_hash=None):
     if request.method == 'GET':
         if image_hash is None:
