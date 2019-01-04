@@ -3,10 +3,12 @@ import hashlib
 
 from flask import Flask, jsonify, send_from_directory, send_file, request, abort
 
+from PIL import Image
+
 import sys
 import os
 
-from .util import get_photo_dir
+from .util import get_photo_dir, get_photo_path
 from .schema import session_scope, Photo
 from .perms import perms, CommentAllPerm, ViewAllPerm, GalleryPerm, UploadPerm, ViewPerm, CommentPerm
 
@@ -42,6 +44,11 @@ def albums():
                      { "name": "Album 2", "id": "album9"},
                      { "name": "Album 2", "id": "album10"} ])
 
+def auto_resize(max_dim, orig_path, output_path):
+    im = Image.open(orig_path)
+    im.thumbnail((max_dim, max_dim))
+    im.save(output_path, "JPEG")
+
 @app.route('/image/<image_hash>')
 @perms.require(mkperm(ViewPerm, photo_id=Placeholder('image_hash')))
 def image(image_hash=None):
@@ -49,11 +56,24 @@ def image(image_hash=None):
         if image_hash is None:
             return abort(404)
 
-        photo_path = get_photo_dir(image_hash)
-        if os.path.exists(photo_path):
-            rsp = send_file(get_photo_dir(image_hash))
+        size = request.args.get('size')
+        if size is not None:
+            try:
+                size = int(size)
+            except ValueError:
+                abort(400)
+
+        orig_path = get_photo_path(image_hash, absolute=True)
+        photo_path = get_photo_path(image_hash, size=size, absolute=True)
+
+        if os.path.exists(orig_path):
+
+            if not os.path.exists(photo_path):
+                auto_resize(size, orig_path, photo_path)
+
+            rsp = send_file(photo_path)
             rsp.headers['Cache-control'] = 'private, max-age=43200'
-            rsp.headers['ETag'] = image_hash
+            rsp.headers['ETag'] = image_hash if size is None else "{}@{}".format(image_hash, size)
             return rsp
         else:
             return abort(404)
@@ -113,6 +133,8 @@ def main(debug = False, port=80):
 
     if debug:
         bundle = sys.argv[1]
+
+        perms.debug = True
 
         @app.route('/app/<path:path>')
         def index(path=''):

@@ -447,6 +447,7 @@ class Permissions(object):
     def __init__(self, base):
         self.url = validate_permissions_url(base)
         self.perms = []
+        self.debug = False
 
     def _set(self, args, ignore_external=False):
         for arg in args:
@@ -553,6 +554,9 @@ class Permissions(object):
 
         def decorate(fn):
             def wrapped(*args, **kwargs):
+                if self.debug:
+                    return fn(*args, **kwargs)
+
                 perms = requirements.get(request.method, default)
 
                 if not isinstance(perms, Sequence):
@@ -561,7 +565,6 @@ class Permissions(object):
                 perms = [ self.normalize_perm(perm, *args, **kwargs) for perm in perms ]
 
                 cur_perms = self.get_current_permissions()
-                print("Got permissions", cur_perms)
                 missing_perms = [ perm for perm in perms if perm not in cur_perms ]
 
                 if len(missing_perms) == 0:

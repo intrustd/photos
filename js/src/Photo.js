@@ -29,7 +29,9 @@ installKite({permissions: [ "kite+perm://photos.flywithkite.com/comment",
                             "kite+perm://photos.flywithkite.com/view/transfer",
 			    "kite+perm://photos.flywithkite.com/gallery",
                             "kite+perm://photos.flywithkite.com/gallery/transfer",
-                            "kite+perm://admin.flywithkite.com/login/transfer" ]})
+                            "kite+perm://admin.flywithkite.com/login/transfer" ],
+             appName: 'photos.flywithkite.com',
+             requiredVersion: '1.0.0' })
 
 class PhotoUpload {
     constructor(key, formData) {
@@ -141,7 +143,7 @@ class PhotoApp extends react.Component {
 
     componentDidMount() {
         fetch(KITE_URL + "/image",
-              { method: 'GET' })
+              { method: 'GET', cache: 'no-store' })
             .then((res) => res.json())
             .then((imgs) => this.setState({images:imgs}))
 
@@ -246,7 +248,8 @@ class PhotoApp extends react.Component {
                               E(Gallery, {match, location, history, images: this.state.images,
                                           onStartSlideshow: this.onStartSlideshow.bind(this),
                                           onEndSlideshow: this.onEndSlideshow.bind(this),
-                                          onImageDescriptionChanged: this.onImageDescriptionChanged.bind(this) }) }),
+                                          onImageDescriptionChanged: this.onImageDescriptionChanged.bind(this),
+                                          key: 'gallery' }) }),
 
                    E('ul', {className: `ph-uploads-indicator ${this.state.uploads.length > 0 ? 'ph-uploads-indicator--active' : ''}`},
                      'Uploading',

@@ -22,12 +22,12 @@ function makeAbsoluteUrl(hash, query) {
 function copyStringToClipboard (str) {
    // Create new element
    var el = document.createElement('textarea');
-   // Set value (string to be copied)
-   el.value = str;
    // Set non-editable to avoid focus and move outside of view
    el.setAttribute('readonly', '');
-   el.style = {position: 'absolute', left: '-9999px'};
+//   el.style = {position: 'absolute', left: '-9999px'};
    document.body.appendChild(el);
+   // Set value (string to be copied)
+   el.value = str;
    // Select text inside element
    el.select();
    // Copy text to clipboard
@@ -113,7 +113,7 @@ class ImageTile extends React.Component {
 
         return E('div', {className: `uk-card uk-card-default ph-gallery-image-card ${editingClass} ${loadingClass} ${selectedClass}`,
                          onClick: () => { this.onClick() }},
-                 E(KiteImage, {src: `${KITE_URL}/image/${this.props.photo.id}`,
+                 E(KiteImage, {src: `${KITE_URL}/image/${this.props.photo.id}?size=300`,
                                onFirstLoad: () => {
                                    setTimeout(() => { this.setState({loaded: true}) },
                                               200 * this.props.index)
@@ -150,11 +150,10 @@ class SlideshowImpl extends React.Component {
     }
 
     componentWillUnmount() {
-        document.body.removeEventListener('keeydown', this.keyHandler)
+        document.body.removeEventListener('keydown', this.keyHandler)
     }
 
     onKeyPress(e) {
-        console.log("Got key pres", e)
         var { history } = this.props
 
         if ( e.key == 'ArrowLeft' ||
@@ -230,6 +229,7 @@ const Slideshow = withRouter(SlideshowImpl)
 export default class Gallery extends React.Component {
     constructor() {
         super()
+        this.shareLinkRef = React.createRef()
         this.state = {
             slideshow: false,
             curSlideIx: 0,
@@ -239,9 +239,9 @@ export default class Gallery extends React.Component {
 
     render() {
         return [
-            E(Route, { path: '/slideshow/:imageId',
+            E(Route, { path: '/slideshow/:imageId', key: 'slideshow',
                        render: this.renderSlideshow.bind(this) }),
-            E(Route, { path: '/', exact: true,
+            E(Route, { path: '/', exact: true, key: 'gallery',
                        render: this.renderGallery.bind(this) })
         ]
     }
@@ -255,7 +255,6 @@ export default class Gallery extends React.Component {
     }
 
     shareSelected() {
-        console.log("Request to share selected");
         var perms = this.state.selected.toArray().map((img) => `kite+perm://photos.flywithkite.com/view/${img}`)
 
         perms.push('kite+perm://photos.flywithkite.com/gallery')
@@ -263,7 +262,7 @@ export default class Gallery extends React.Component {
 
         mintToken(perms,  { format: 'query' })
             .then((tok) => makeAbsoluteUrl('#/', tok))
-            .then((url) => { copyStringToClipboard(url); this.notifyCopy() })
+            .then((url) => { this.setState({shareLink: url}); this.notifyCopy() })
     }
 
     renderSlideshow(thisProps) {
@@ -309,24 +308,28 @@ export default class Gallery extends React.Component {
             )
         }
 
-        var notification
+        var shareBox
 
-        if ( this.state.copied ) {
-            notification = E('div', { className: 'copy-notification-container' },
-                             E('div', { className: 'copy-notification' },
-                               E('i', { className: 'copy-notification-close',
-                                        onClick: () => { this.setState({closed: null}) } }),
-                               'Link copied'))
+        if ( this.state.shareLink ) {
+            shareBox = E('div', { className: 'ph-share-link-box' },
+                         E('input', { type: 'text', value: this.state.shareLink, readonly: true, ref: this.shareLinkRef }),
+                         E('i', { className: 'ph-share-link-copy fa fa-fw fa-copy',
+                                  onClick: () => {
+                                      this.shareLinkRef.current.select()
+                                      document.execCommand('copy')
+                                  } }),
+                         E('i', { className: 'ph-share-link-close fa fa-fw fa-times',
+                                  onClick: () => { this.setState({shareLink: null}) }}))
         }
 
         return E('div', {className: `uk-flex uk-flex-wrap uk-flex-center ph-gallery ${galleryClass}`, 'uk-grid': 'uk-grid'},
-                 notification,
                  gallery,
 
                  E('div', {className: `ph-gallery-selected-indicator ${hasSelection ? '' : 'ph-gallery-selected-indicator--empty'}`},
                    E('div', {className: 'ph-gallery-selected-indicator-label'},
                      `${this.state.selected.count()} images selected`,
                      E('div', {className: 'ph-gallery-images-toolbar'},
+                       shareBox,
                        E('i', {className: 'ph-gallery-images-toolbtn fa fa-fw fa-link',
                                onClick: this.shareSelected.bind(this) }))),
                    E('div', {className: 'ph-gallery-selected-indicator-list'}, 'images')))
