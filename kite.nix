@@ -33,7 +33,7 @@ let grpc-io-tools = ps: ps.buildPythonPackage rec {
 
       doCheck = false;
 
-      propagatedBuildInputs = with python.pkgs; [ flask sqlalchemy requests ];
+      propagatedBuildInputs = with python.pkgs; [ flask sqlalchemy requests pillow ];
 
       meta = {
         homepage = "https://flywithkite.com";
