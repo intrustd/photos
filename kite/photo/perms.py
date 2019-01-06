@@ -13,9 +13,6 @@ class ViewPerm(object):
         self.photo_id = photo_id
 
     def search(self, search):
-        for _ in search.search(GalleryPerm):
-            search.satisfy()
-
         for _ in search.search(ViewAllPerm):
             search.satisfy()
 
