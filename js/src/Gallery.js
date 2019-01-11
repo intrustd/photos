@@ -258,7 +258,7 @@ export default class Gallery extends React.Component {
         var perms = this.state.selected.toArray().map((img) => `kite+perm://photos.flywithkite.com/view/${img}`)
 
         perms.push('kite+perm://photos.flywithkite.com/gallery')
-        perms.push('kite+perm://admin.flywithkite.com/login')
+        perms.push('kite+perm://admin.flywithkite.com/guest')
 
         mintToken(perms,  { format: 'query' })
             .then((tok) => makeAbsoluteUrl('#/', tok))

@@ -364,7 +364,7 @@ class PredicateSearcher(object):
 
         for perm in self._perms:
             if pred.match(perm):
-                yield pred.spec_pattern.data
+                yield self._schema.normalize_perm(perm)
 
     def search(self, *args):
         for pred in args:
@@ -447,6 +447,7 @@ class Permissions(object):
     def __init__(self, base):
         self.url = validate_permissions_url(base)
         self.perms = []
+        self.descriptors = []
         self.debug = False
 
     def _set(self, args, ignore_external=False):
@@ -467,16 +468,27 @@ class Permissions(object):
             elif isinstance(arg, Sequence):
                 for x in self._set(arg):
                     yield x
+            elif isinstance(arg, (set, PermissionSet,)):
+                for x in arg:
+                    yield x
             elif isinstance(arg, Permission):
                 yield arg.url
             else:
-                raise TypeError("Expected str, permission, or Sequence")
+                raise TypeError("Expected str, permission, PermissionSet or Sequence")
 
     def set(self, *args, ignore_external=False):
         perms = PermissionSet(self)
         ps = list(self._set(args, ignore_external=ignore_external))
         perms.add(*ps)
         return perms
+
+    def description(self, fn):
+        self.descriptors.append(fn)
+
+        def wrapped(*args, **kwargs):
+            raise AssertionError("{}: Do not call functions passed to Permissions.description".format(fn.__name__))
+        wrapped.__name__ = fn.__name__
+        return wrapped
 
     def permission(self, spec):
         if not spec.startswith('/'):
@@ -586,11 +598,13 @@ class Permissions(object):
                             dest="action", action="store_const", const="lookup")
         action.add_argument("-c", "--check", help="Check that the given permission exists based on the set of permissions read from stdin",
                             dest="action", action="store_const", const="check")
+        action.add_argument("-D", "--describe", help="Produce a description of the given set of permissions",
+                            dest="action", action="store_const", const="describe")
 
         parser.add_argument("-p", "--persona", help="Persona ID to use", type=persona_id)
         parser.add_argument("-a", "--application", help="Application ID to use", type=str)
 
-        parser.add_argument("permission", nargs="+")
+        parser.add_argument("permission", nargs="*")
 
         args = parser.parse_args()
 
@@ -643,6 +657,54 @@ class Permissions(object):
 
             print(json.dumps({ 'accepted': list(accepted), 'denied': list(denied) }))
 
+        elif args.action == 'describe':
+            working_set = []
+
+            while True:
+                try:
+                    line = input()
+                except EOFError:
+                    break
+                if line == "":
+                    break
+                else:
+                    try:
+                        perm = self.parse_perm(line)
+                    except KitePermAppMismatchError:
+                        continue
+
+                    if perm is None:
+                        print("Invalid permission on stdin: {}".format(line), file=sys.stderr)
+                        exit(3)
+                    else:
+                        working_set.append(perm)
+
+            working_set = self.set(working_set)
+            described_set = self.set()
+            all_entries = []
+            for d in self.descriptors:
+                if len(working_set) == 0:
+                    break
+
+                search = PredicateSearcher(working_set)
+                res = d(search)
+                if res is None:
+                    continue
+                entries, perms = res
+
+                all_entries.extend(entries)
+
+                described_set = self.set(described_set, perms)
+                working_set = self.set([p for p in working_set if p not in described_set])
+
+            if len(working_set) > 0:
+                for p in working_set:
+                    all_entries.append({'short': 'Unknown permission {}'.format(p)})
+
+            print(json.dumps(all_entries))
+
+            exit(0)
+
         else:
             parser.print_help()
             exit(2)
@@ -663,6 +725,22 @@ class Permission(object):
         self.is_complete = not self.spec_pattern.has_placeholders
         self.extension = extension
         self.base = base or self
+
+    def __getitem__(self, key):
+        if not isinstance(key, str):
+            raise TypeError("Permission keys must be strings")
+
+        return self.spec_pattern.data[key]
+
+    def __getattr__(self, key):
+        clsattr = getattr(type(self), key, None)
+        if clsattr is not None:
+            return clsattr
+
+        try:
+            return self[key]
+        except ValueError:
+            raise AttributeError(key)
 
     def __hash__(self):
         return hash(self.spec)
@@ -732,7 +810,9 @@ class Permission(object):
         if isinstance(other, str):
             return self.match(self.perms.parse_perm(other))
         elif isinstance(other, Permission):
-            return other.base is self.base and self.spec_pattern.data == other.spec_pattern.data
+            other_items = other.spec_pattern.data.items()
+            return other.base is self.base and \
+                all(item in other_items for item in self.spec_pattern.data.items())
         else:
             raise TypeError("Expected str or Permission")
 

@@ -29,7 +29,7 @@ installKite({permissions: [ "kite+perm://photos.flywithkite.com/comment",
                             "kite+perm://photos.flywithkite.com/view/transfer",
 			    "kite+perm://photos.flywithkite.com/gallery",
                             "kite+perm://photos.flywithkite.com/gallery/transfer",
-                            "kite+perm://admin.flywithkite.com/login/transfer" ],
+                            "kite+perm://admin.flywithkite.com/guest/transfer" ],
              appName: 'photos.flywithkite.com',
              requiredVersion: '1.0.0' })
 

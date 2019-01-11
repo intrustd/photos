@@ -29,7 +29,7 @@ let grpc-io-tools = ps: ps.buildPythonPackage rec {
       pname = "kite-photo";
       version = "0.1.0";
 
-      src = ./.;
+      src = ./dist/kite-photos-0.1.0.tar.gz;
 
       doCheck = false;
 
@@ -42,6 +42,7 @@ let grpc-io-tools = ps: ps.buildPythonPackage rec {
     };
 
 in {
+
   kite.meta = {
      slug = "photos";
      name = "Kite Photos";
@@ -78,11 +79,7 @@ in {
       description = "View photos"; }
 
     { name = "gallery";
-      description = "View all photos"; }
-
-    { name = "gallery/minimal";
-      description = "View only the set of photos shared";
-      dynamic = true; }
+      description = "List all photos"; }
 
     { regex = "view/(?P<photo_id>[A-Fa-f0-9]{64})";
       description = "View some photos";
