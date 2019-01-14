@@ -43,6 +43,7 @@ def basic_actions(search):
     gallery = False
     view = False
     comment = False
+    upload = False
 
     for p in search.search(CommentAllPerm):
         comment = True
@@ -56,6 +57,10 @@ def basic_actions(search):
         gallery = True
         perms.add(p)
 
+    for p in search.search(UploadPerm):
+        upload = True
+        perms.app(p)
+
     actions = []
     if gallery:
         actions.append("list")
@@ -65,6 +70,9 @@ def basic_actions(search):
 
     if comment:
         actions.append("comment")
+
+    if upload:
+        actions.append("upload")
 
     if len(actions) == 0:
         return [], set()

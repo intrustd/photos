@@ -1,6 +1,6 @@
-from sqlalchemy import Column, Integer, String, DateTime, \
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, \
     func, create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.ext.declarative import declarative_base
 
 from contextlib import contextmanager
@@ -17,11 +17,19 @@ class Photo(Base):
     created_on = Column(DateTime, default=func.now())
     modified_on = Column(DateTime, onupdate=func.now(), default=func.now())
 
+    tags = relationship('PhotoTag', cascade='delete-orphan')
+
     def to_json(self):
         return { 'id': self.id,
                  'description': self.description,
                  'created': datetime_json(self.created_on),
                  'modified': datetime_json(self.modified_on) }
+
+class PhotoTag(Base):
+    __tablename__ = 'photo_tag'
+
+    photo_id = Column(String(32), ForeignKey('photo.id'), primary_key=True)
+    tag = Column(String, primary_key=True)
 
 engine = create_engine("sqlite:///" + get_photo_dir(".photos.db", absolute=True))
 database = Base.metadata.create_all(engine)
