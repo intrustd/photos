@@ -25,6 +25,17 @@ def sha256_sum_file(fp):
         h.update(chunk)
     return h.hexdigest()
 
+def no_cache(fn):
+    def no_cache_wrapped(*args, **kwargs):
+        r = app.make_response(fn(*args, **kwargs))
+        if 'Cache-control' not in r.headers and \
+           request.method == 'GET':
+            r.headers['Cache-control'] = 'no-cache'
+        return r
+
+    no_cache_wrapped.__name__ = fn.__name__
+    return no_cache_wrapped
+
 temp_photo_dir = get_photo_dir('.tmp')
 
 tag_re = re.compile('#([a-zA-Z0-9_\\-\'"]+)')
@@ -115,6 +126,7 @@ def upload():
 @app.route('/image/<image_hash>/description', methods=['GET', 'PUT'])
 @perms.require({ 'GET': mkperm(ViewPerm, photo_id=Placeholder('image_hash')),
                  'PUT': mkperm(CommentPerm, photo_id=Placeholder('image_hash')) })
+@no_cache
 def image_description(image_hash=None):
     if image_hash is None:
         return abort(404)
@@ -146,6 +158,7 @@ def image_description(image_hash=None):
 
 @app.route('/tag', methods=['GET'])
 @perms.require(GalleryPerm)
+@no_cache
 def tags():
     with session_scope() as session:
         query = request.args.get('query')

@@ -17,7 +17,7 @@ class Photo(Base):
     created_on = Column(DateTime, default=func.now())
     modified_on = Column(DateTime, onupdate=func.now(), default=func.now())
 
-    tags = relationship('PhotoTag', cascade='delete-orphan')
+    tags = relationship('PhotoTag', cascade='delete,delete-orphan')
 
     def to_json(self):
         return { 'id': self.id,

@@ -7,6 +7,7 @@ import { KiteImage } from 'stork-js/src/react.js';
 import { KITE_URL } from './PhotoUrl.js';
 
 import { Route, Link, withRouter } from 'react-router-dom';
+import { MentionsInput, Mention } from 'react-mentions';
 
 import './Gallery.scss';
 
@@ -19,24 +20,6 @@ function makeAbsoluteUrl(hash, query) {
     return uri.toString()
 }
 
-function copyStringToClipboard (str) {
-   // Create new element
-   var el = document.createElement('textarea');
-   // Set non-editable to avoid focus and move outside of view
-   el.setAttribute('readonly', '');
-//   el.style = {position: 'absolute', left: '-9999px'};
-   document.body.appendChild(el);
-   // Set value (string to be copied)
-   el.value = str;
-   // Select text inside element
-   el.select();
-   // Copy text to clipboard
-   document.execCommand('copy');
-   // Remove temporary element
-    document.body.removeChild(el);
-    console.log("Copy string to clipboard", str)
-}
-
 const E = React.createElement;
 class ImageTile extends React.Component {
     constructor() {
@@ -46,7 +29,8 @@ class ImageTile extends React.Component {
     }
 
     editDescription() {
-        this.setState({ editingDescription: true })
+        this.setState({ editingDescription: true,
+                        editingValue: this.props.photo.description })
     }
 
     onTextAreaKey(e) {
@@ -55,10 +39,11 @@ class ImageTile extends React.Component {
             e.preventDefault();
             this.setState({ editingDescription: false })
         } else if ( e.keyCode == 13 ) {
-            this.props.onDescriptionSet(e.target.value);
+            this.props.onDescriptionSet(this.state.editingValue)
             e.stopPropagation();
             e.preventDefault();
-            this.setState({ editingDescription: false })
+            this.setState({ editingDescription: false,
+                            editingValue: undefined })
         }
     }
 
@@ -73,30 +58,62 @@ class ImageTile extends React.Component {
         alert(`Will share ${this.props.photo.id}`)
     }
 
+    searchTags(search, cb) {
+        var baseUrl = 'kite+app://photos.flywithkite.com/tag'
+        if ( search.length > 0 )
+            baseUrl += `?query=${encodeURIComponent(search)}`
+        fetch(baseUrl)
+            .then((r) => r.json())
+            .then((tags) => {
+                var results = [ { id: search, display: `#${search}` } ]
+                results.push.apply(results, tags.map((tag) => { return { id: tag, display: `#${tag}` } }))
+
+                return results
+            })
+            .then(cb)
+    }
+
     render () {
-        var description, editingClass = '', loadingClass = '', selectedClass = '', savingIcon
+        var mkDescription, editingClass = '', loadingClass = '', selectedClass = '', savingIcon
         var editBtn =
             E('span', {className: 'fa fa-fw fa-pencil ph-edit-btn'})
 
+
         if ( this.state.editingDescription ) {
             editingClass = 'ph-gallery-image-card--editing';
-            description = E('textarea', { className: 'ph-image-description',
-                                          onKeyDown: (e) => { this.onTextAreaKey(e) },
-                                          placeholder: 'Add description', autoFocus: true,
-                                          defaultValue: this.props.photo.description })
+            mkDescription = () =>
+              E('div', { onClick: (e) => { e.stopPropagation() } },
+                E(MentionsInput,
+                  { className: 'ph-image-description',
+                    value: this.state.editingValue,
+                    markup: '(#__id__)',
+                    style: { suggestions: { 'backgroundColor': 'rgba(0,0,0,0.9)', 'position': 'fixed', zIndex: 10000 } },
+                    suggestionsPortalHost: this.props.galleryNode,
+                    onKeyDown: this.onTextAreaKey.bind(this),
+                    onChange: (e, newVal) => {
+                        this.setState({editingValue: newVal})
+                    } },
+                  E(Mention, { trigger: '#', type: 'tag',
+                               data: this.searchTags.bind(this) })))
+//            description = E('textarea', { className: 'ph-image-description',
+//                                          onKeyDown: (e) => { this.onTextAreaKey(e) },
+//                                          placeholder: 'Add description', autoFocus: true,
+//                                          defaultValue: this.props.photo.description })
         } else {
             if ( this.props.photo.loading )
                 editingClass = 'ph-gallery-image-card--saving';
 
             console.log("this props photo description", this.props.photo.description)
             if ( this.props.photo.description.length == 0 )
-                description = E('p', { className: 'ph-image-description ph-image-description--empty',
-                                       onClick: (e) => { e.stopPropagation(); this.editDescription() }},
-                                'Add description', editBtn)
+                mkDescription = () =>
+                  E('p', { className: 'ph-image-description ph-image-description--empty',
+                           onClick: (e) => { e.stopPropagation(); this.editDescription() }},
+                    'Add description', editBtn)
             else
-                description = E('p', { className: 'ph-image-description',
-                                       onClick: (e) => { e.stopPropagation(); this.editDescription() }},
-                                this.props.photo.description, editBtn)
+                mkDescription = () =>
+                  E('p', { className: 'ph-image-description',
+                           onClick: (e) => { e.stopPropagation(); this.editDescription() }},
+                    this.props.photo.description, editBtn)
         }
 
         if ( this.props.photo.loading ) {
@@ -112,7 +129,7 @@ class ImageTile extends React.Component {
             selectedClass = 'ph-gallery-image-card--selected';
 
         return E('div', {className: `uk-card uk-card-default ph-gallery-image-card ${editingClass} ${loadingClass} ${selectedClass}`,
-                         onClick: () => { this.onClick() }},
+                         onClick: () => { this.onClick() } },
                  E(KiteImage, {src: `${KITE_URL}/image/${this.props.photo.id}?size=300`,
                                onFirstLoad: () => {
                                    setTimeout(() => { this.setState({loaded: true}) },
@@ -131,7 +148,7 @@ class ImageTile extends React.Component {
                        E('i', { className: 'fa fa-fw fa-link' })),
                      this.props.photo.created,
                      savingIcon),
-                   description))
+                   mkDescription()))
     }
 }
 
@@ -229,7 +246,7 @@ const Slideshow = withRouter(SlideshowImpl)
 export default class Gallery extends React.Component {
     constructor() {
         super()
-        this.shareLinkRef = React.createRef()
+        this.galleryRef = React.createRef()
         this.state = {
             slideshow: false,
             curSlideIx: 0,
@@ -246,23 +263,20 @@ export default class Gallery extends React.Component {
         ]
     }
 
-    notifyCopy() {
-        if ( this.state.copied )
-            cancelTimeout(this.state.copied);
-
-        var copied = setTimeout(() => { this.setState({copied: null}) }, 5000);
-        this.setState({copied})
-    }
-
     shareSelected() {
         var perms = this.state.selected.toArray().map((img) => `kite+perm://photos.flywithkite.com/view/${img}`)
 
         perms.push('kite+perm://photos.flywithkite.com/gallery')
         perms.push('kite+perm://admin.flywithkite.com/guest')
 
-        mintToken(perms,  { format: 'query' })
-            .then((tok) => makeAbsoluteUrl('#/', tok))
-            .then((url) => { this.setState({shareLink: url}); this.notifyCopy() })
+        return mintToken(perms,  { format: 'query' })
+                 .then((tok) => makeAbsoluteUrl('#/', tok))
+    }
+
+    updateSelection(selected) {
+        this.setState({selected})
+        if ( this.props.onSelectionChanged )
+            this.props.onSelectionChanged(selected)
     }
 
     renderSlideshow(thisProps) {
@@ -288,6 +302,7 @@ export default class Gallery extends React.Component {
             gallery = this.props.images.map(
                 (img, index) =>
                     E(ImageTile, { photo: img, key: img.id, index: index,
+                                   galleryNode: this.galleryRef.current,
                                    selected: this.state.selected.contains(img.id),
                                    onSelect: () => {
                                        var { selected } = this.state
@@ -297,7 +312,7 @@ export default class Gallery extends React.Component {
                                        else
                                            selected = selected.add(img.id)
 
-                                       this.setState({ selected })
+                                       this.updateSelection(selected)
                                    },
                                    onActivated: () => {
                                        history.push(`${match.url}slideshow/${img.id}`)
@@ -308,30 +323,8 @@ export default class Gallery extends React.Component {
             )
         }
 
-        var shareBox
-
-        if ( this.state.shareLink ) {
-            shareBox = E('div', { className: 'ph-share-link-box' },
-                         E('input', { type: 'text', value: this.state.shareLink, readonly: true, ref: this.shareLinkRef }),
-                         E('i', { className: 'ph-share-link-copy fa fa-fw fa-copy',
-                                  onClick: () => {
-                                      this.shareLinkRef.current.select()
-                                      document.execCommand('copy')
-                                  } }),
-                         E('i', { className: 'ph-share-link-close fa fa-fw fa-times',
-                                  onClick: () => { this.setState({shareLink: null}) }}))
-        }
-
-        return E('div', {className: `uk-flex uk-flex-wrap uk-flex-center ph-gallery ${galleryClass}`, 'uk-grid': 'uk-grid'},
-                 gallery,
-
-                 E('div', {className: `ph-gallery-selected-indicator ${hasSelection ? '' : 'ph-gallery-selected-indicator--empty'}`},
-                   E('div', {className: 'ph-gallery-selected-indicator-label'},
-                     `${this.state.selected.count()} images selected`,
-                     E('div', {className: 'ph-gallery-images-toolbar'},
-                       shareBox,
-                       E('i', {className: 'ph-gallery-images-toolbtn fa fa-fw fa-link',
-                               onClick: this.shareSelected.bind(this) }))),
-                   E('div', {className: 'ph-gallery-selected-indicator-list'}, 'images')))
+        return E('div', {className: `uk-flex uk-flex-wrap uk-flex-center ph-gallery ${galleryClass}`, 'uk-grid': 'uk-grid',
+                         ref: this.galleryRef },
+                 gallery)
     }
 }
