@@ -29,7 +29,7 @@ let grpc-io-tools = ps: ps.buildPythonPackage rec {
       pname = "kite-photo";
       version = "0.1.0";
 
-      src = ./dist/kite-photos-0.1.0.tar.gz;
+      src = ./.;
 
       doCheck = false;
 
