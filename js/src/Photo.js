@@ -31,7 +31,7 @@ installKite({permissions: [ "kite+perm://photos.flywithkite.com/comment",
                             "kite+perm://photos.flywithkite.com/gallery/transfer",
                             "kite+perm://admin.flywithkite.com/guest/transfer" ],
              appName: 'photos.flywithkite.com',
-             requiredVersion: '1.0.0' })
+             requiredVersion: '0.0.0' })
 
 class PhotoUpload {
     constructor(key, formData) {
@@ -139,6 +139,7 @@ class PhotoApp extends react.Component {
 
         this.state = { uploads: [], slideshow: false }
         this.uploadKey = 0
+        this.galleryRef = react.createRef()
     }
 
     componentDidMount() {
@@ -236,12 +237,24 @@ class PhotoApp extends react.Component {
         this.setState({ slideshow: false })
     }
 
+    doShare() {
+        if ( this.state.selectedCount > 0 &&
+             this.galleryRef.current ) {
+            this.galleryRef.current.shareSelected()
+                .then((url) => this.setState({ shareLink: url }))
+        }
+    }
+
     render() {
         const E = react.createElement;
         console.log("Render", this.state.uploads)
         return E(Router, {},
                  E('div', null,
-                   E(Navbar, { uploadPhoto: (fd) => this.uploadPhoto(fd) }),
+                   E(Navbar, { uploadPhoto: (fd) => this.uploadPhoto(fd),
+                               imgCount: this.state.images !== undefined ? this.state.images.length : undefined,
+                               selectedCount: this.state.selectedCount,
+                               onShare: this.doShare.bind(this),
+                               shareLink: this.state.shareLink }),
 
                    E(Route, { path: '/',
                               render: ({match, location, history}) =>
@@ -249,7 +262,8 @@ class PhotoApp extends react.Component {
                                           onStartSlideshow: this.onStartSlideshow.bind(this),
                                           onEndSlideshow: this.onEndSlideshow.bind(this),
                                           onImageDescriptionChanged: this.onImageDescriptionChanged.bind(this),
-                                          key: 'gallery' }) }),
+                                          onSelectionChanged: (sel) => this.setState({selectedCount: sel.size}),
+                                          key: 'gallery', ref: this.galleryRef }) }),
 
                    E('ul', {className: `ph-uploads-indicator ${this.state.uploads.length > 0 ? 'ph-uploads-indicator--active' : ''}`},
                      'Uploading',

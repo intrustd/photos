@@ -3,6 +3,24 @@
 $indicator-label-color: #f8f8f8;
 $indicator-border-color: #ccc;
 
+.ph-upload {
+    margin: 0;
+}
+
+.ph-nav-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+
+    & > .uk-inline {
+        max-width: none;
+    }
+}
+
+.ph-nav-link-default {
+    color: #555;
+}
+
 .ph-gallery-image {
     min-width: 300px;
     min-height: 300px;
@@ -79,9 +97,9 @@ $indicator-border-color: #ccc;
 }
 
 .ph-image-description {
+    box-sizing: border-box;
     padding: 4px;
 
-    resize: none;
     width: 100%;
 
     display: block;
@@ -90,6 +108,15 @@ $indicator-border-color: #ccc;
     transition: border 0.2s;
 
     cursor: text;
+
+    textarea {
+        outline: none;
+        resize: none;
+        width: 100%;
+        color: white;
+        border: none;
+        background: transparent;
+    }
 
     .ph-edit-btn {
         opacity: 0;
@@ -104,9 +131,15 @@ $indicator-border-color: #ccc;
     }
 }
 
-textarea.ph-image-description {
-    background: transparent;
-    color: white;
+.ph-gallery-image-card--editing {
+    .ph-image-description {
+        border-color: white;
+    }
+}
+
+.ph-image-description__suggestions {
+    background-color: rgba(black, .9);
+    border: 1px solid #ccc;
 }
 
 @keyframes fade-slides-in {
@@ -191,57 +224,3 @@ textarea.ph-image-description {
     transition: transform 0.3s;
 }
 
-/* Selected indicator */
-
-.ph-gallery-selected-indicator {
-    position: absolute;
-    left: 0;
-    bottom: 0;
-
-    .ph-gallery-selected-indicator-label {
-        border: 1px solid $indicator-border-color;
-        border-bottom: none;
-        background-color: $indicator-label-color;
-        padding: 3px 16px;
-        .ph-gallery-images-toolbar {
-            display: inline-block;
-
-            .ph-gallery-images-toolbtn {
-                color: #222;
-                &:hover {
-                    color: #207ce5;
-                    cursor: pointer;
-                }
-            }
-        }
-    }
-
-    .ph-gallery-selected-indicator-list {
-        display: none;
-    }
-}
-
-.ph-gallery-selected-indicator--empty {
-    display: none;
-}
-
-.ph-share-link-box {
-    position: absolute;
-    bottom: 35px;
-
-    display: flex;
-    padding: 3px;
-    background-color: $indicator-label-color;
-    border: 1px solid $indicator-border-color;
-
-    .ph-share-link-copy {
-        display: inline-block;
-        cursor: pointer;
-        width: 1em;
-    }
-    .ph-share-link-close {
-        cursor: pointer;
-        width: 1em;
-        margin: 0 5px 0 5px;
-    }
-}

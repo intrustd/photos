@@ -7,9 +7,10 @@ from PIL import Image
 
 import sys
 import os
+import re
 
 from .util import get_photo_dir, get_photo_path
-from .schema import session_scope, Photo
+from .schema import session_scope, Photo, PhotoTag
 from .perms import perms, CommentAllPerm, ViewAllPerm, GalleryPerm, UploadPerm, ViewPerm, CommentPerm
 
 from kite.permissions import Placeholder, mkperm
@@ -24,7 +25,20 @@ def sha256_sum_file(fp):
         h.update(chunk)
     return h.hexdigest()
 
+def no_cache(fn):
+    def no_cache_wrapped(*args, **kwargs):
+        r = app.make_response(fn(*args, **kwargs))
+        if 'Cache-control' not in r.headers and \
+           request.method == 'GET':
+            r.headers['Cache-control'] = 'no-cache'
+        return r
+
+    no_cache_wrapped.__name__ = fn.__name__
+    return no_cache_wrapped
+
 temp_photo_dir = get_photo_dir('.tmp')
+
+tag_re = re.compile('#([a-zA-Z0-9_\\-\'"]+)')
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = temp_photo_dir
@@ -112,6 +126,7 @@ def upload():
 @app.route('/image/<image_hash>/description', methods=['GET', 'PUT'])
 @perms.require({ 'GET': mkperm(ViewPerm, photo_id=Placeholder('image_hash')),
                  'PUT': mkperm(CommentPerm, photo_id=Placeholder('image_hash')) })
+@no_cache
 def image_description(image_hash=None):
     if image_hash is None:
         return abort(404)
@@ -126,7 +141,38 @@ def image_description(image_hash=None):
             return photo.description
         elif request.method == 'PUT':
             photo.description = request.data.decode("utf-8")
+
+            tags = []
+            for tag_match in tag_re.finditer(photo.description):
+                tag = tag_match.group(1)
+                tag_obj = session.query(PhotoTag).get((photo.id, tag))
+                if tag_obj is None:
+                    tag_obj = PhotoTag(photo_id = photo.id,
+                                       tag = tag)
+                    session.add(tag_obj)
+                tags.append(tag_obj)
+
+            photo.tags = tags
+
             return jsonify({})
+
+@app.route('/tag', methods=['GET'])
+@perms.require(GalleryPerm)
+@no_cache
+def tags():
+    with session_scope() as session:
+        query = request.args.get('query')
+        try:
+            limit = int(request.args.get('limit', 10))
+        except ValueError:
+            abort(400)
+
+        tags = session.query(PhotoTag.tag)
+
+        if query is not None:
+            tags = tags.filter(PhotoTag.tag.like('%{}%'.format(query)))
+
+        return jsonify([t.tag for t in tags.limit(limit).distinct()])
 
 def main(debug = False, port=80):
     print("Starting server")
