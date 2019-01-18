@@ -9,6 +9,11 @@ export default class Navbar extends React.Component {
         super()
         this.uploadRef = React.createRef()
         this.shareLinkRef = React.createRef()
+        this.dropdownRef = React.createRef()
+
+        this.links = []
+        this.shareLink = null
+        this.copyShareLink = null
     }
 
     doUpload(e) {
@@ -18,12 +23,35 @@ export default class Navbar extends React.Component {
         this.uploadRef.current.reset()
     }
 
-    copyShareLink(e) {
-        e.preventDefault();
-        e.stopPropagation()
+    doCopyShareLink(e) {
         if ( this.shareLinkRef.current ) {
             this.shareLinkRef.current.select()
             document.execCommand('copy')
+        }
+    }
+
+    componentDidMount() {
+        this.disableLinks()
+
+        this.shareLink.addEventListener('click', () => { this.props.onShare(); })
+    }
+
+    componentDidUpdate() {
+        this.disableLinks()
+    }
+
+    disableLinks() {
+        this.links.map((l) => {
+            if ( l !== null && !l.stopped ) {
+                l.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation() })
+                l.stopped = true
+            }
+        })
+
+        if ( this.copyShareLink !== null &&
+             !this.copyShareLink.bound ) {
+            this.copyShareLink.bound = true
+            this.copyShareLink.addEventListener('click', this.doCopyShareLink.bind(this))
         }
     }
 
@@ -37,6 +65,24 @@ export default class Navbar extends React.Component {
              this.props.selectedCount > 0 )
             status.push(`${this.props.selectedCount} selected`)
 
+        var shareLinkInput
+
+        if ( this.props.shareLink ) {
+            shareLinkInput = [
+                E('li', null,
+                  E('div', { className: 'uk-inline' },
+                    E('a', { className: 'uk-form-icon uk-form-icon-flip', href: '#',
+                             ref: (r) => { this.links.push(r); this.copyShareLink = r } },
+                      E('i', { className: 'fa fa-fw fa-copy' })),
+                    E('input', { type: 'text', className: 'uk-input',
+                                 ref: this.shareLinkRef,
+                                 value: this.props.shareLink }))
+                 ),
+                E('li', { className: 'uk-nav-divider' })
+            ];
+        }
+
+        this.links = []
         return E('nav', {className: 'uk-navbar-container', 'uk-navbar': '' },
                  E('div', {className: 'uk-navbar-left'},
                    E('a', {className: 'uk-navbar-item uk-logo',
@@ -52,20 +98,22 @@ export default class Navbar extends React.Component {
                    E('div', { className: 'uk-navbar-item ph-nav-icon' },
                      E('div', { className: 'uk-inline' },
                        E('a', { href: '#', className: 'ph-nav-link-default',
-                                onClick: (e) => { this.props.onShare() },
-                              'uk-tooltip': 'title: Share; pos: bottom' },
+                                'uk-tooltip': 'title: Share; pos: bottom' },
                          E('i', { className: 'fa fa-fw fa-share-alt' })),
-                       E('div', { 'uk-dropdown': 'mode: click' },
-                         E('ul', { className: 'uk-nav uk-navbar-dropdown-menu' },
+                       E('div', { 'uk-dropdown': 'mode: click',
+                                  ref: this.dropdownRef },
+                         E('ul', { className: 'uk-nav uk-navbar-dropdown-menu uk-dropdown-nav' },
+                           shareLinkInput,
                            E('li', null,
-                             E('div', { className: 'uk-inline' },
-                               E('a', { className: 'uk-form-icon uk-form-icon-flip', href: '#',
-                                        onClick: this.copyShareLink.bind(this) },
-                                 E('i', { className: 'fa fa-fw fa-copy' })),
-                               E('input', { type: 'text', className: 'uk-input',
-                                            ref: this.shareLinkRef,
-                                            value: this.props.shareLink }))
-                            ))))),
+                             E('a', { href: '#',
+                                      ref: (r) => { this.links.push(r); this.shareLink = r } },
+                               'Share selected...')),
+                           E('li', null,
+                             E('a', { href: '#',
+                                      ref: (r) => { this.links.push(r) },
+                                      onClick: (e) => { e.preventDefault(); e.stopPropagation(); } },
+                               'Share all...'))
+                          )))),
 
                    E(KiteForm, { method: 'POST', encType: 'multipart/form-data',
                                  className: 'uk-navbar-item ph-upload ph-nav-icon',

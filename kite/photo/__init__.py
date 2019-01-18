@@ -8,6 +8,7 @@ from PIL import Image
 import sys
 import os
 import re
+import math
 
 from .util import get_photo_dir, get_photo_path
 from .schema import session_scope, Photo, PhotoTag
@@ -59,9 +60,13 @@ def albums():
                      { "name": "Album 2", "id": "album10"} ])
 
 def auto_resize(max_dim, orig_path, output_path):
-    im = Image.open(orig_path)
-    im.thumbnail((max_dim, max_dim))
-    im.save(output_path, "JPEG")
+    with Image.open(orig_path) as im:
+        im.thumbnail((max_dim, max_dim))
+        im.save(output_path, "JPEG")
+
+def round_size(size):
+    new_size = int(2 ** math.ceil(math.log(size, 2)))
+    return max(new_size, 100)
 
 @app.route('/image/<image_hash>')
 @perms.require(mkperm(ViewPerm, photo_id=Placeholder('image_hash')))
@@ -76,6 +81,8 @@ def image(image_hash=None):
                 size = int(size)
             except ValueError:
                 abort(400)
+
+        size = round_size(size)
 
         orig_path = get_photo_path(image_hash, absolute=True)
         photo_path = get_photo_path(image_hash, size=size, absolute=True)
@@ -92,14 +99,29 @@ def image(image_hash=None):
         else:
             return abort(404)
 
+def _update_photo_dims(photo):
+    path = get_photo_path(photo.id)
+    if os.path.exists(path):
+        with Image.open(path) as im:
+            width, height = im.size
+            photo.width = width
+            photo.height = height
+
 @app.route('/image', methods=['GET', 'POST'])
 @perms.require({ 'GET': GalleryPerm,
-                 'POST': UploadPerm })
-def upload():
+                 'POST': UploadPerm },
+               pass_permissions=True)
+def upload(cur_perms=None):
+
     if request.method == 'GET':
         with session_scope() as session:
             photos = session.query(Photo).order_by(Photo.created_on.desc())
-            rsp = jsonify([p.to_json() for p in photos])
+
+            for photo in photos:
+                if photo.width is None or photo.height is None:
+                    _update_photo_dims(photo)
+
+            rsp = jsonify([p.to_json() for p in photos if ViewPerm(photo_id=p.id) in cur_perms])
             rsp.headers['Cache-Control'] = 'no-cache'
             return rsp
 
@@ -118,6 +140,7 @@ def upload():
             if photo is None:
                 photo = Photo(id=photo_id,
                               description="")
+                _update_photo_dims(photo)
                 session.add_all([photo])
                 session.commit()
 

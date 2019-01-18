@@ -554,7 +554,7 @@ class Permissions(object):
         else:
             raise RuntimeError("Unknown status code while looking for tokens: {}".format(r.status_code))
 
-    def require(self, reqs):
+    def require(self, reqs, pass_permissions=False):
         from flask import request
 
         default = []
@@ -567,6 +567,8 @@ class Permissions(object):
         def decorate(fn):
             def wrapped(*args, **kwargs):
                 if self.debug:
+                    kwargs['cur_perms'] = \
+                        self.set('kite+perm://admin.flywithkite.com/nuclear')
                     return fn(*args, **kwargs)
 
                 perms = requirements.get(request.method, default)
@@ -578,6 +580,9 @@ class Permissions(object):
 
                 cur_perms = self.get_current_permissions()
                 missing_perms = [ perm for perm in perms if perm not in cur_perms ]
+
+                if pass_permissions:
+                    kwargs['cur_perms'] = cur_perms
 
                 if len(missing_perms) == 0:
                     return fn(*args, **kwargs)
