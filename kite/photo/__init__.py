@@ -82,7 +82,7 @@ def image(image_hash=None):
             except ValueError:
                 abort(400)
 
-        size = round_size(size)
+            size = round_size(size)
 
         orig_path = get_photo_path(image_hash, absolute=True)
         photo_path = get_photo_path(image_hash, size=size, absolute=True)
