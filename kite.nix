@@ -43,6 +43,9 @@ let grpc-io-tools = ps: ps.buildPythonPackage rec {
 
 in {
 
+  kite.version.major = 0;
+  kite.version.minor = 1;
+
   kite.meta = {
      slug = "photos";
      name = "Kite Photos";
