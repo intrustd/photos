@@ -59,7 +59,7 @@ def basic_actions(search):
 
     for p in search.search(UploadPerm):
         upload = True
-        perms.app(p)
+        perms.add(p)
 
     actions = []
     if gallery:

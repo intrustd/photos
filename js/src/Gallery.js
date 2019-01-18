@@ -8,6 +8,7 @@ import { KITE_URL } from './PhotoUrl.js';
 
 import { Route, Link, withRouter } from 'react-router-dom';
 import { MentionsInput, Mention } from 'react-mentions';
+import reactGallery from 'react-photo-gallery';
 
 import './Gallery.scss';
 
@@ -128,9 +129,16 @@ class ImageTile extends React.Component {
         if ( this.props.selected )
             selectedClass = 'ph-gallery-image-card--selected';
 
+        var size = Math.ceil(Math.max(this.props.photo.width, this.props.photo.height))
+
         return E('div', {className: `uk-card uk-card-default ph-gallery-image-card ${editingClass} ${loadingClass} ${selectedClass}`,
+                         style: { width: `${this.props.photo.width}px`,
+                                  height: `${this.props.photo.height}px`,
+                                  margin: `${this.props.margin}px` },
                          onClick: () => { this.onClick() } },
-                 E(KiteImage, {src: `${KITE_URL}/image/${this.props.photo.id}?size=300`,
+                 E(KiteImage, {src: `${KITE_URL}/image/${this.props.photo.id}?size=${size}`,
+                               style: {  width: `${this.props.photo.width}px`,
+                                         height: `${this.props.photo.height}px` },
                                onFirstLoad: () => {
                                    setTimeout(() => { this.setState({loaded: true}) },
                                               200 * this.props.index)
@@ -243,6 +251,32 @@ class SlideshowImpl extends React.Component {
 
 const Slideshow = withRouter(SlideshowImpl)
 
+function ImageTileClosure({photo, index, margin}) {
+    var img = photo
+    var gallery = photo.gallery
+    var { history, match } = gallery.props
+    return E(ImageTile, { photo: img, key: img.id, margin,
+                          index: index,
+                          galleryNode: img.galleryRef,
+                          selected: gallery.state.selected.contains(img.id),
+                          onSelect: () => {
+                              var { selected } = gallery.state
+
+                              if ( selected.contains(img.id) )
+                                  selected = selected.delete(img.id)
+                              else
+                                  selected = selected.add(img.id)
+
+                              gallery.updateSelection(selected)
+                          },
+                          onActivated: () => {
+                              history.push(`${match.url}slideshow/${img.id}`)
+                          },
+                          onDescriptionSet: (newDesc) => {
+                              gallery.props.onImageDescriptionChanged(img.id, newDesc)
+                          } })
+}
+
 export default class Gallery extends React.Component {
     constructor() {
         super()
@@ -298,33 +332,44 @@ export default class Gallery extends React.Component {
             gallery = E('div', { className: 'ph-gallery-empty-msg' }, 'No images')
             galleryClass = 'ph-gallery-empty'
         } else {
-            var { history, match } = this.props
-            gallery = this.props.images.map(
-                (img, index) =>
-                    E(ImageTile, { photo: img, key: img.id, index: index,
-                                   galleryNode: this.galleryRef.current,
-                                   selected: this.state.selected.contains(img.id),
-                                   onSelect: () => {
-                                       var { selected } = this.state
+            var photos =
+                this.props.images.map((img) =>
+                    Object.assign({ src:img.id, key:img.id, gallery: this },
+                                  img))
 
-                                       if ( selected.contains(img.id) )
-                                           selected = selected.delete(img.id)
-                                       else
-                                           selected = selected.add(img.id)
+            gallery =
+                E(reactGallery,
+                  { photos, margin: 2,
+                    ImageComponent: ImageTileClosure })
 
-                                       this.updateSelection(selected)
-                                   },
-                                   onActivated: () => {
-                                       history.push(`${match.url}slideshow/${img.id}`)
-                                   },
-                                   onDescriptionSet: (newDesc) => {
-                                       this.props.onImageDescriptionChanged(img.id, newDesc)
-                                   }})
-            )
+//this.props.images.map(
+//    (img, index) =>
+//        E(ImageTile, { photo: img, key: img.id, index: index,
+//                       galleryNode: this.galleryRef.current,
+//                       selected: this.state.selected.contains(img.id),
+//                       onSelect: () => {
+//                           var { selected } = this.state
+//
+//                           if ( selected.contains(img.id) )
+//                               selected = selected.delete(img.id)
+//                           else
+//                               selected = selected.add(img.id)
+//
+//                           this.updateSelection(selected)
+//                       },
+//                       onActivated: () => {
+//                           history.push(`${match.url}slideshow/${img.id}`)
+//                       },
+//                       onDescriptionSet: (newDesc) => {
+//                           this.props.onImageDescriptionChanged(img.id, newDesc)
+//                       }})
+//)
         }
 
-        return E('div', {className: `uk-flex uk-flex-wrap uk-flex-center ph-gallery ${galleryClass}`, 'uk-grid': 'uk-grid',
-                         ref: this.galleryRef },
-                 gallery)
+        return E('div', { className: `ph-gallery ${galleryClass}`, ref: this.galleryRef }, gallery)
+
+//        return E('div', {className: `uk-flex uk-flex-wrap uk-flex-center ph-gallery ${galleryClass}`, 'uk-grid': 'uk-grid',
+//                         ref: this.galleryRef },
+//                 gallery)
     }
 }
