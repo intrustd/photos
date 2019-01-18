@@ -31,7 +31,7 @@ installKite({permissions: [ "kite+perm://photos.flywithkite.com/comment",
                             "kite+perm://photos.flywithkite.com/gallery/transfer",
                             "kite+perm://admin.flywithkite.com/guest/transfer" ],
              appName: 'photos.flywithkite.com',
-             requiredVersion: '0.1.0' })
+             requiredVersion: '0.1.1547832238' })
 
 class PhotoUpload {
     constructor(key, formData) {
