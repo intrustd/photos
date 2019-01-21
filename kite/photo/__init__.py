@@ -10,7 +10,10 @@ import os
 import re
 import math
 
-from .util import get_photo_dir, get_photo_path
+from sqlalchemy import or_, and_, func
+from sqlalchemy.orm import aliased
+
+from .util import get_photo_dir, get_photo_path, parse_json_datetime, datetime_sql
 from .schema import session_scope, Photo, PhotoTag
 from .perms import perms, CommentAllPerm, ViewAllPerm, GalleryPerm, UploadPerm, ViewPerm, CommentPerm
 
@@ -39,7 +42,7 @@ def no_cache(fn):
 
 temp_photo_dir = get_photo_dir('.tmp')
 
-tag_re = re.compile('#([a-zA-Z0-9_\\-\'"]+)')
+tag_re = re.compile('#\\[[#a-zA-Z0-9_\\-\'"]+\\]\\(([A-Za-z0-9_\\-\'"]+)\\)')
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = temp_photo_dir
@@ -115,14 +118,66 @@ def upload(cur_perms=None):
 
     if request.method == 'GET':
         with session_scope() as session:
-            photos = session.query(Photo).order_by(Photo.created_on.desc())
+            tags = request.args.getlist('tag[]')
+            query = request.args.get('q')
+            after = request.args.get('after_id')
+            after_date = request.args.get('after_date')
+            limit = request.args.get('limit')
+
+            if after is not None:
+                if len(after) != 64 or any(c not in '0123456789abcdefABCDEF' for c in after):
+                    abort(400)
+
+            if after_date is not None:
+                after_date = parse_json_datetime(after_date)
+
+            if (after is not None and after_date is None) or \
+               (after is None and after_date is not None):
+                abort(400)
+
+            if limit is not None:
+                try:
+                    limit = int(limit)
+                except ValueError:
+                    abort(400)
+
+                if limit < 0:
+                    abort(400)
+
+                limit = min(20, limit)
+            else:
+                limit = 20
+
+            photos = session.query(Photo)
+
+            if len(tags) > 0:
+                for tag in tags:
+                    photo_tags = aliased(PhotoTag)
+                    photos = photos.join(photo_tags, and_(photo_tags.tag == tag, photo_tags.photo_id == Photo.id))
+
+            if query is not None:
+                filters = ["%{}%".format(kw) for kw in query.split(" ")]
+                photos = photos.filter(or_(Photo.description.like(f) for f in filters))
+
+            total_photos = session.query(func.count(photos.subquery().c.id))[0][0]
+
+            if after is not None:
+                photos = photos.filter(or_(Photo.created_on < datetime_sql(after_date),
+                                           and_(Photo.created_on == datetime_sql(after_date), Photo.id > after)))
+
+            photos = photos.order_by(Photo.created_on.desc(), Photo.id.asc())
+
+            if limit is not None:
+                photos = photos[:limit]
 
             for photo in photos:
                 if photo.width is None or photo.height is None:
                     _update_photo_dims(photo)
 
-            rsp = jsonify([p.to_json() for p in photos if ViewPerm(photo_id=p.id) in cur_perms])
+            rsp = jsonify({ 'images': [p.to_json() for p in photos if ViewPerm(photo_id=p.id) in cur_perms or perms.debug],
+                            'total': total_photos })
             rsp.headers['Cache-Control'] = 'no-cache'
+
             return rsp
 
     elif request.method == 'POST':

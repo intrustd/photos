@@ -222,3 +222,64 @@ $indicator-border-color: #ccc;
     transition: transform 0.3s;
 }
 
+.ph-tags-searcher {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+}
+
+.ph-tags-searcher__tag {
+    display: inline-block;
+    margin: 8px 3px;
+    border: 1px outset #207ce5;
+    background-color: lighten(#207ce5, 40%);
+    border-radius: 2px;
+    line-height: 1em;
+    padding: 5px;
+
+    cursor: pointer;
+    -webkit-touch-callout: none; /* iOS Safari */
+    -webkit-user-select: none; /* Safari */
+    -khtml-user-select: none; /* Konqueror HTML */
+    -moz-user-select: none; /* Firefox */
+    -ms-user-select: none; /* Internet Explorer/Edge */
+    user-select: none; /* Non-prefixed version, currently */
+}
+
+.ph-tags-searcher__tag__delete {
+    width: 10px;
+    height: 10px;
+    display: inline-block;
+
+    margin-left: 4px;
+
+    color: #888;
+
+    transition: color 0.2s;
+
+    &:before {
+        content: '\f00d';
+        font-family: 'FontAwesome';
+    }
+
+    &:hover {
+        color: #333;
+    }
+}
+
+.ph-tags-searcher__input {
+    margin: 0;
+    padding: 0;
+    border: none;
+    outline: none;
+    appearance: none;
+}
+
+.ph-image-description__tag--selected {
+    background-color: #207ce5;
+}
+
+.ph-gallery-loading-indicator {
+    padding-top: 50px;
+    padding-bottom: 25px;
+}

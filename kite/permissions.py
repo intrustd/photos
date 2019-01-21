@@ -568,7 +568,7 @@ class Permissions(object):
             def wrapped(*args, **kwargs):
                 if self.debug:
                     kwargs['cur_perms'] = \
-                        self.set('kite+perm://admin.flywithkite.com/nuclear')
+                        self.set()
                     return fn(*args, **kwargs)
 
                 perms = requirements.get(request.method, default)
