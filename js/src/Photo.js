@@ -5,15 +5,16 @@ import './Photos.scss';
 
 import 'font-awesome/scss/font-awesome.scss';
 
+import { mintToken } from 'stork-js';
 import { streamsExample } from 'stork-js/src/polyfill/Streams.js';
 
 import Albums from './Albums';
 import Gallery from './Gallery';
 import Navbar from './Navbar';
-import { KITE_URL } from './PhotoUrl.js';
+import { KITE_URL, makeAbsoluteUrl } from './PhotoUrl.js';
 import { installKite } from 'stork-js';
 
-import { Map } from 'immutable';
+import { Map, Set, OrderedSet } from 'immutable';
 import react from 'react';
 import ReactDom from 'react-dom';
 import { HashRouter as Router,
@@ -137,21 +138,49 @@ class PhotoApp extends react.Component {
     constructor() {
         super()
 
-        this.state = { uploads: [], slideshow: false }
+        this.state = { uploads: [], slideshow: false,
+                       searchTags: OrderedSet(),
+                       search: null }
         this.uploadKey = 0
         this.galleryRef = react.createRef()
     }
 
     componentDidMount() {
-        fetch(KITE_URL + "/image",
+        this.updateImages()
+    }
+
+    updateImages() {
+        var search = this.state.searchTags.toArray()
+            .map((tag) => `tag[]=${encodeURIComponent(tag)}`)
+        var append = false
+
+        if ( this.state.search !== null )
+            search.push(`q=${encodeURIComponent(this.state.search)}`)
+
+        if ( this.state.images !== undefined && this.state.images.length > 0 ) {
+            search.push(`after_id=${this.state.images[this.state.images.length - 1].id}`)
+            search.push(`after_date=${this.state.images[this.state.images.length - 1].created}`)
+            append = true
+        }
+
+        search.push('limit=10')
+
+        if ( search.length > 0 )
+            search = `?${search.join('&')}`
+
+        console.log("search is ", search)
+
+        fetch(`${KITE_URL}/image${search}`,
               { method: 'GET', cache: 'no-store' })
             .then((res) => res.json())
-            .then((imgs) => this.setState({images:imgs}))
+            .then(({ images, total }) => {
+                var hasMore = images.length == 10
 
-//            .then((imgs) => imgs.map((im, i) => [ im.id, { image: im, nextImage:  ]))
-//            .then((imgs) => this.setState({
-//                images: this.state.images.merge(Object.fromEntries(imgs))
-//            }))
+                if ( append )
+                    images = this.state.images.concat(images)
+                console.log("Images are ", images)
+                this.setState({ images, hasMore, imageCount: total })
+            })
     }
 
     uploadPhoto(fd) {
@@ -237,11 +266,53 @@ class PhotoApp extends react.Component {
         this.setState({ slideshow: false })
     }
 
-    doShare() {
-        if ( this.state.selectedCount > 0 &&
-             this.galleryRef.current ) {
-            this.galleryRef.current.shareSelected()
-                .then((url) => this.setState({ shareLink: url }))
+    shareAll() {
+        return mintToken([ 'kite+perm://photos.flywithkite.com/gallery',
+                           'kite+perm://photos.flywithkite.com/view',
+                           'kite+perm://admin.flywithkite.com/guest' ],
+                         { format: 'query' })
+            .then((tok) => makeAbsoluteUrl('#/', tok))
+    }
+
+    selectTag(tag, include) {
+        var oldTags = this.state.searchTags, searchTags
+
+        if ( !include )
+            searchTags = this.state.searchTags.delete(tag)
+        else
+            searchTags = this.state.searchTags.add(tag)
+
+        this.setState({searchTags})
+
+        if ( !searchTags.equals(oldTags) ) {
+            this.setState({ images: undefined, imageCount: undefined, hasMore: true }, this.updateImages.bind(this))
+        }
+    }
+
+    doShare(what) {
+        switch ( what ) {
+        case 'all':
+            this.shareAll().then((url) => this.setState({shareLink: url}))
+            break
+        case 'selected':
+            if ( this.state.selectedCount > 0 &&
+                 this.galleryRef.current ) {
+                this.galleryRef.current.shareSelected()
+                    .then((url) => this.setState({ shareLink: url }))
+            }
+            break;
+        default:
+            console.log('doShare: do not know what to share: ', what)
+        }
+    }
+
+    doSelectAll() {
+        if ( this.galleryRef.current !== undefined && this.state.images !== undefined ) {
+            if ( this.state.selectedCount == this.state.images.length )
+                this.galleryRef.current.updateSelection(Set())
+            else {
+                this.galleryRef.current.selectAll()
+            }
         }
     }
 
@@ -251,14 +322,22 @@ class PhotoApp extends react.Component {
         return E(Router, {},
                  E('div', null,
                    E(Navbar, { uploadPhoto: (fd) => this.uploadPhoto(fd),
-                               imgCount: this.state.images !== undefined ? this.state.images.length : undefined,
+                               searchTags: this.state.searchTags,
+                               selectTag: this.selectTag.bind(this),
+                               imgCount: this.state.imageCount !== undefined ? this.state.imageCount : undefined,
                                selectedCount: this.state.selectedCount,
+                               allSelected: this.state.images !== undefined && this.state.selectedCount == this.state.images.length,
+                               onSelectAll: this.doSelectAll.bind(this),
                                onShare: this.doShare.bind(this),
                                shareLink: this.state.shareLink }),
 
                    E(Route, { path: '/',
                               render: ({match, location, history}) =>
                               E(Gallery, {match, location, history, images: this.state.images,
+                                          hasMore: this.state.hasMore,
+                                          loadMore: this.updateImages.bind(this),
+                                          selectedTags: this.state.searchTags,
+                                          selectTag: this.selectTag.bind(this),
                                           onStartSlideshow: this.onStartSlideshow.bind(this),
                                           onEndSlideshow: this.onEndSlideshow.bind(this),
                                           onImageDescriptionChanged: this.onImageDescriptionChanged.bind(this),

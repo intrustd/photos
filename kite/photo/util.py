@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 
 def get_photo_dir(inner=None, absolute=False):
     if inner is None:
@@ -23,3 +24,12 @@ def get_photo_path(inner=None, absolute=False, size=None):
 
 def datetime_json(dt):
     return dt.strftime("%Y-%m-%dT%H:%M:%S")
+
+def parse_json_datetime(dt):
+    try:
+        return datetime.strptime(dt, "%Y-%m-%dT%H:%M:%S")
+    except ValueError:
+        return None
+
+def datetime_sql(dt):
+    return dt.strftime("%Y-%m-%d %H:%M:%S")

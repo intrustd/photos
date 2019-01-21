@@ -3,25 +3,85 @@ import React from 'react';
 import Navbar from './Navbar.js';
 
 import { mintToken } from 'stork-js';
-import { KiteImage } from 'stork-js/src/react.js';
-import { KITE_URL } from './PhotoUrl.js';
+import { KiteImage, KiteLoadingIndicator } from 'stork-js/src/react.js';
+import { KITE_URL, makeAbsoluteUrl } from './PhotoUrl.js';
 
 import { Route, Link, withRouter } from 'react-router-dom';
 import { MentionsInput, Mention } from 'react-mentions';
 import reactGallery from 'react-photo-gallery';
+import VisibilitySensor from 'react-visibility-sensor';
 
 import './Gallery.scss';
 
 import { Set } from 'immutable';
 
-function makeAbsoluteUrl(hash, query) {
-    var uri = new URL(location.href)
-    uri.hash = hash
-    uri.search = query
-    return uri.toString()
+const E = React.createElement;
+
+class MentionsParagraph extends React.Component {
+    constructor() {
+        super()
+
+        this.state = { lastParagraph: '', tagRe: null, components: [] }
+    }
+
+    updateParagraph(desc) {
+        var tagRe = this.state.tagRe
+        if ( this.state.tagRe === null ||
+             this.state.tagRe.source != this.props.re ) {
+            tagRe = new RegExp(this.props.re, 'g')
+            this.setState({tagRe})
+        }
+
+        var lastIndex = 0
+        tagRe.lastIndex = 0
+
+        var match, components = []
+        while ( (match = tagRe.exec(desc)) !== null ) {
+            if ( match.index > lastIndex ) {
+                components.push({text: desc.substring(lastIndex, match.index)})
+            }
+
+            components.push({tag: match[1]})
+            lastIndex = match.index + match[0].length
+        }
+
+        if ( lastIndex < desc.length )
+            components.push({text: desc.substring(lastIndex, desc.length)})
+
+        this.setState({lastParagraph: desc,
+                       components})
+    }
+
+    componentDidMount() {
+        this.updateParagraph(this.props.description)
+    }
+
+    componentDidUpdate(prevProps, prevState) {
+        if ( this.props.description != prevProps.description )
+            this.updateParagraph(this.props.description)
+    }
+
+    render() {
+        var editBtn =
+            E('span', {className: 'fa fa-fw fa-pencil ph-edit-btn'})
+
+        var emptyClass
+        if ( this.props.description.length == 0 )
+            emptyClass = this.props.emptyClass
+
+        return E('p', { className: `${this.props.className} ${emptyClass}`,
+                        onClick: this.props.onClick },
+                 this.state.components.length == 0 ? this.props.placeholder :
+                 this.state.components.map((c) => {
+                     if ( c.tag )
+                         return E(this.props.MentionComponent, {id: c.tag})
+                     else
+                         return E('span', null, c.text)
+                 }),
+                editBtn)
+    }
 }
 
-const E = React.createElement;
 class ImageTile extends React.Component {
     constructor() {
         super()
@@ -76,8 +136,6 @@ class ImageTile extends React.Component {
 
     render () {
         var mkDescription, editingClass = '', loadingClass = '', selectedClass = '', savingIcon
-        var editBtn =
-            E('span', {className: 'fa fa-fw fa-pencil ph-edit-btn'})
 
 
         if ( this.state.editingDescription ) {
@@ -87,7 +145,7 @@ class ImageTile extends React.Component {
                 E(MentionsInput,
                   { className: 'ph-image-description',
                     value: this.state.editingValue,
-                    markup: '(#__id__)',
+                    markup: '#[__display__](__id__)',
                     style: { suggestions: { 'backgroundColor': 'rgba(0,0,0,0.9)', 'position': 'fixed', zIndex: 10000 } },
                     suggestionsPortalHost: this.props.galleryNode,
                     onKeyDown: this.onTextAreaKey.bind(this),
@@ -104,17 +162,34 @@ class ImageTile extends React.Component {
             if ( this.props.photo.loading )
                 editingClass = 'ph-gallery-image-card--saving';
 
-            console.log("this props photo description", this.props.photo.description)
-            if ( this.props.photo.description.length == 0 )
-                mkDescription = () =>
-                  E('p', { className: 'ph-image-description ph-image-description--empty',
-                           onClick: (e) => { e.stopPropagation(); this.editDescription() }},
-                    'Add description', editBtn)
-            else
-                mkDescription = () =>
-                  E('p', { className: 'ph-image-description',
-                           onClick: (e) => { e.stopPropagation(); this.editDescription() }},
-                    this.props.photo.description, editBtn)
+            mkDescription = () =>
+                E(MentionsParagraph, { re: '#\\[[#a-zA-Z0-9_\\-\'"]+\\]\\(([A-Za-z0-9_\\-\'"]+)\\)',
+                                       className: 'ph-image-description',
+                                       emptyClass: 'ph-image-description--empty',
+                                       placeholder: 'Add description',
+                                       onClick: (e) => {
+                                           e.stopPropagation();
+                                           this.editDescription()
+                                       },
+                                       MentionComponent: ({id}) => {
+                                           var selectedClass = ""
+
+                                           if ( this.props.selectedTags.contains(id) )
+                                               selectedClass = 'ph-image-description__tag--selected';
+
+                                           return E('a', { href: '#',
+                                                           className: `ph-image-description__tag ${selectedClass}`,
+                                                           onClick: (e) => {
+                                                               e.stopPropagation()
+
+                                                               if ( this.props.selectedTags.contains(id) )
+                                                                   this.props.selectTag(id, false)
+                                                               else
+                                                                   this.props.selectTag(id, true)
+                                                           }},
+                                                    `#${id}`)
+                                       },
+                                       description: this.props.photo.description })
         }
 
         if ( this.props.photo.loading ) {
@@ -130,6 +205,7 @@ class ImageTile extends React.Component {
             selectedClass = 'ph-gallery-image-card--selected';
 
         var size = Math.ceil(Math.max(this.props.photo.width, this.props.photo.height))
+        size = Math.max(100, Math.round(Math.pow(2, Math.ceil(Math.log(size)/Math.log(2)))))
 
         return E('div', {className: `uk-card uk-card-default ph-gallery-image-card ${editingClass} ${loadingClass} ${selectedClass}`,
                          style: { width: `${this.props.photo.width}px`,
@@ -258,6 +334,8 @@ function ImageTileClosure({photo, index, margin}) {
     return E(ImageTile, { photo: img, key: img.id, margin,
                           index: index,
                           galleryNode: img.galleryRef,
+                          selectedTags: gallery.props.selectedTags,
+                          selectTag: gallery.props.selectTag,
                           selected: gallery.state.selected.contains(img.id),
                           onSelect: () => {
                               var { selected } = gallery.state
@@ -280,6 +358,7 @@ function ImageTileClosure({photo, index, margin}) {
 export default class Gallery extends React.Component {
     constructor() {
         super()
+        this.wasVisible = false
         this.galleryRef = React.createRef()
         this.state = {
             slideshow: false,
@@ -307,10 +386,29 @@ export default class Gallery extends React.Component {
                  .then((tok) => makeAbsoluteUrl('#/', tok))
     }
 
-    updateSelection(selected) {
+    setSelection(selected) {
         this.setState({selected})
+    }
+
+    selectAll() {
+        if ( this.props.images !== undefined ) {
+            var selected = Set(this.props.images.map((i) => i.id))
+            this.updateSelection(selected)
+        }
+    }
+
+    updateSelection(selected) {
+        this.setSelection(selected)
         if ( this.props.onSelectionChanged )
             this.props.onSelectionChanged(selected)
+    }
+
+    onLoadIndicatorVisible(visible) {
+        if ( visible && this.props.hasMore && !this.wasVisible ) {
+            this.props.loadMore()
+            this.wasVisible = true
+        } else
+            this.wasVisible = false
     }
 
     renderSlideshow(thisProps) {
@@ -337,10 +435,18 @@ export default class Gallery extends React.Component {
                     Object.assign({ src:img.id, key:img.id, gallery: this },
                                   img))
 
+            var visibilitySensor
+
+            if ( this.props.hasMore )
+                visibilitySensor = E(VisibilitySensor, { onChange: this.onLoadIndicatorVisible.bind(this) },
+                                     E('div', { className: 'ph-gallery-loading-indicator' },
+                                       E(KiteLoadingIndicator)))
+
             gallery =
-                E(reactGallery,
-                  { photos, margin: 2,
-                    ImageComponent: ImageTileClosure })
+                [ E(reactGallery,
+                    { photos, margin: 2,
+                      ImageComponent: ImageTileClosure }),
+                  visibilitySensor ]
 
 //this.props.images.map(
 //    (img, index) =>

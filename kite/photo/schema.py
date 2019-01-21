@@ -12,7 +12,7 @@ Base = declarative_base()
 class Photo(Base):
     __tablename__ = 'photo'
 
-    id = Column(String(32), primary_key=True)
+    id = Column(String(64), primary_key=True)
     description = Column(String)
     created_on = Column(DateTime, default=func.now())
     modified_on = Column(DateTime, onupdate=func.now(), default=func.now())
@@ -33,7 +33,7 @@ class Photo(Base):
 class PhotoTag(Base):
     __tablename__ = 'photo_tag'
 
-    photo_id = Column(String(32), ForeignKey('photo.id'), primary_key=True)
+    photo_id = Column(String(64), ForeignKey('photo.id'), primary_key=True)
     tag = Column(String, primary_key=True)
 
 class Version(Base):
@@ -62,13 +62,13 @@ def do_migrate():
 
         if version <= 0:
             connection.execute('''
-              CREATE TABLE photo(id CHAR(32) PRIMARY KEY,
+              CREATE TABLE photo(id CHAR(64) PRIMARY KEY,
                                  description VARCHAR NOT NULL,
                                  created_on TIMESTAMP NOT NULL,
                                  modified_on TIMESTAMP NOT NULL)
             ''')
             connection.execute('''
-              CREATE TABLE photo_tag(photo_id CHAR(32) NOT NULL,
+              CREATE TABLE photo_tag(photo_id CHAR(64) NOT NULL,
                                      tag VARCHAR NOT NULL,
                                      PRIMARY KEY (photo_id, tag))
             ''')

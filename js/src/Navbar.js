@@ -1,8 +1,43 @@
 import React from 'react';
 import { KITE_URL } from './PhotoUrl.js';
 import { KiteUploadButton, KiteForm, KitePersonaButton } from 'stork-js/src/react.js';
+import { debounce } from 'underscore';
 
 const E = React.createElement;
+
+class TagSearcher extends React.Component {
+    constructor() {
+        super()
+
+        this.inputRef = React.createRef()
+        this.state = {}
+    }
+
+    render() {
+        var emptyClass = "", body
+        if ( this.isEmpty ) {
+            emptyClass = 'ph-tags-searcher--empty'
+            body = this.props.placeholder
+        } else {
+            body = [
+                this.props.tags.toArray().map((tag) => {
+                    return E('div', { className: 'ph-tags-searcher__tag',
+                                      key: `tag-${tag}` },
+                             tag,
+                             E('span', { className: 'ph-tags-searcher__tag__delete',
+                                         onClick: () => this.props.selectTag(tag, false) }))
+                }),
+
+                E('input', { type: 'text', className: 'ph-tags-searcher__input', key: 'input', ref: this.inputRef })
+            ]
+        }
+
+        return E('div', { className: `uk-input ph-tags-searcher ${emptyClass}`,
+                          tabIndex: "1",
+                          onFocus: () => { this.inputRef.current.focus() } },
+                 body)
+    }
+}
 
 export default class Navbar extends React.Component {
     constructor () {
@@ -13,6 +48,7 @@ export default class Navbar extends React.Component {
 
         this.links = []
         this.shareLink = null
+        this.shareAllLink = null
         this.copyShareLink = null
     }
 
@@ -33,7 +69,8 @@ export default class Navbar extends React.Component {
     componentDidMount() {
         this.disableLinks()
 
-        this.shareLink.addEventListener('click', () => { this.props.onShare(); })
+        this.shareLink.addEventListener('click', () => { this.props.onShare('selected'); })
+        this.shareAllLink.addEventListener('click', () => { this.props.onShare('all'); })
     }
 
     componentDidUpdate() {
@@ -83,17 +120,35 @@ export default class Navbar extends React.Component {
         }
 
         this.links = []
+
+        var selectAllCheck
+        if ( this.props.allSelected )
+            selectAllCheck = 'fa-square'
+        else
+            selectAllCheck = 'fa-check-square'
+
         return E('nav', {className: 'uk-navbar-container', 'uk-navbar': '' },
                  E('div', {className: 'uk-navbar-left'},
                    E('a', {className: 'uk-navbar-item uk-logo',
                            href: '#'}, 'Photo'),
                    E('div', { className: 'uk-navbar-item' },
-                    )),
+                     E(TagSearcher, { placeholder: 'Search...',
+                                      selectTag: this.props.selectTag,
+                                      tags: this.props.searchTags }))),
 
                  E('div', {className: 'uk-navbar-right'},
 
                    E('div', { className: 'uk-navbar-item ph-nav-status' },
                      status.join(", ")),
+
+                   E('div', { className: 'uk-navbar-item ph-nav-icon' },
+                     E('a', { href: '#',
+                              className: 'ph-nav-link-default',
+                              onClick: () => { this.props.onSelectAll() },
+                              'uk-tooltip': ( this.props.allSelected ?
+                                              'title: Deselect all; pos: bottom' :
+                                              'title: Select all; pos: bottom' ) },
+                       E('i', { className: `fa fa-fw ${selectAllCheck}` }))),
 
                    E('div', { className: 'uk-navbar-item ph-nav-icon' },
                      E('div', { className: 'uk-inline' },
@@ -108,10 +163,13 @@ export default class Navbar extends React.Component {
                              E('a', { href: '#',
                                       ref: (r) => { this.links.push(r); this.shareLink = r } },
                                'Share selected...')),
+                           E('li', { style: { display: (this.props.searchTags.count() == 0 ? 'none' : 'inherit') } },
+                             E('a', { href: '#',
+                                      ref: (r) => { this.links.push(r); this.shareTagsLink = r } },
+                               'Share these tags...')),
                            E('li', null,
                              E('a', { href: '#',
-                                      ref: (r) => { this.links.push(r) },
-                                      onClick: (e) => { e.preventDefault(); e.stopPropagation(); } },
+                                      ref: (r) => { this.links.push(r); this.shareAllLink = r }, },
                                'Share all...'))
                           )))),
 
