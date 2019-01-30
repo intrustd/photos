@@ -2,8 +2,8 @@ import React from 'react';
 
 import Navbar from './Navbar.js';
 
-import { mintToken } from 'intrustd-js';
-import { Image, LoadingIndicator } from 'intrustd-js/src/react.js';
+import { mintToken } from 'intrustd';
+import { Image, LoadingIndicator } from 'intrustd/src/react.js';
 import { INTRUSTD_URL, makeAbsoluteUrl } from './PhotoUrl.js';
 
 import { Route, Link, withRouter } from 'react-router-dom';

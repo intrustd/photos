@@ -18,7 +18,7 @@
     "react-photo-gallery": "^6.3.0",
     "react-router": "^4.3.1",
     "react-router-dom": "^4.3.1",
-    "intrustd-js": "github:intrustd/js",
+    "intrustd": "intrustd/js",
     "react-visibility-sensor": "^5.0.2",
     "uikit": "^3.0.0-rc.11",
     "underscore": "^1.9.1",

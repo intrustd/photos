@@ -5,8 +5,8 @@ import './Photos.scss';
 
 import 'font-awesome/scss/font-awesome.scss';
 
-import { install, mintToken } from 'intrustd-js';
-import { streamsExample } from 'intrustd-js/src/polyfill/Streams.js';
+import { install, mintToken } from 'intrustd';
+import { streamsExample } from 'intrustd/src/polyfill/Streams.js';
 
 import Albums from './Albums';
 import Gallery from './Gallery';

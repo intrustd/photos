@@ -1,6 +1,6 @@
 import React from 'react';
 import { INTRUSTD_URL } from './PhotoUrl.js';
-import { UploadButton, Form, PersonaButton } from 'intrustd-js/src/react.js';
+import { UploadButton, Form, PersonaButton } from 'intrustd/src/react.js';
 import { debounce } from 'underscore';
 
 const E = React.createElement;

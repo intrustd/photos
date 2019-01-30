@@ -3,7 +3,7 @@ import React from 'react';
 import Navbar from './Navbar.js';
 import { INTRUSTD_URL } from './PhotoUrl.js';
 
-import { Image } from 'intrustd-js/src/react.js';
+import { Image } from 'intrustd/src/react.js';
 import { Link } from 'react-router-dom';
 
 import './Albums.scss';
