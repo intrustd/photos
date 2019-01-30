@@ -1,6 +1,6 @@
 import React from 'react';
-import { KITE_URL } from './PhotoUrl.js';
-import { KiteUploadButton, KiteForm, KitePersonaButton } from 'stork-js/src/react.js';
+import { INTRUSTD_URL } from './PhotoUrl.js';
+import { UploadButton, Form, PersonaButton } from 'intrustd-js/src/react.js';
 import { debounce } from 'underscore';
 
 const E = React.createElement;
@@ -173,15 +173,15 @@ export default class Navbar extends React.Component {
                                'Share all...'))
                           )))),
 
-                   E(KiteForm, { method: 'POST', encType: 'multipart/form-data',
-                                 className: 'uk-navbar-item ph-upload ph-nav-icon',
-                                 action: KITE_URL + "/upload", ref: this.uploadRef,
-                                 onSubmit: (e) => { this.doUpload(e) }},
-                     E(KiteUploadButton, { elName: 'a', name: 'photo',
-                                           'uk-tooltip': 'title: Upload photo; pos: bottom',
-                                           onUpload: (e) => { this.doUpload() } },
+                   E(Form, { method: 'POST', encType: 'multipart/form-data',
+                             className: 'uk-navbar-item ph-upload ph-nav-icon',
+                             action: INTRUSTD_URL + "/upload", ref: this.uploadRef,
+                             onSubmit: (e) => { this.doUpload(e) }},
+                     E(UploadButton, { elName: 'a', name: 'photo',
+                                       'uk-tooltip': 'title: Upload photo; pos: bottom',
+                                       onUpload: (e) => { this.doUpload() } },
                        E('span', {className: 'fa fa-upload'}))),
                    E('ul', {className: 'uk-navbar-nav'},
-                     E(KitePersonaButton, {}))));
+                     E(PersonaButton, {}))));
     }
 }

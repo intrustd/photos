@@ -2,7 +2,7 @@ import pytest
 
 from .permissions import Permissions, parse_template, LiteralToken, PlaceholderToken, ReValidator, mkperm, Placeholder
 
-perms = Permissions('kite+perm://photos.flywithkite.com')
+perms = Permissions('intrustd+perm://photos.intrustd.com')
 
 CommentAllPerm = perms.permission('/comment')
 GalleryPerm = perms.permission('/gallery')
@@ -33,7 +33,7 @@ class CommentPerm(object):
 def test_permission():
     perm = CommentPerm(photo_id='a'*32)
     assert perm.is_complete
-    assert perm.url == 'kite+perm://photos.flywithkite.com/comment/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+    assert perm.url == 'intrustd+perm://photos.intrustd.com/comment/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 
 def test_permissionset():
     s = perms.set('/comment', GalleryPerm)
@@ -56,46 +56,46 @@ def test_disjunction2():
     assert CommentPerm(photo_id = 'a'*32) not in s
     assert CommentPerm(photo_id = 'a'*31 + 'b') not in s
 
-    s.add('kite+perm://photos.flywithkite.com/delete/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
+    s.add('intrustd+perm://photos.intrustd.com/delete/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
     assert CommentPerm(photo_id = 'a'*32) in s
 
 def test_parse_eot():
-    perms = Permissions('kite+perm://app.flywithkite.com')
+    perms = Permissions('intrustd+perm://app.intrustd.com')
 
     with pytest.raises(ValueError) as excinfo:
         TestPerm = perms.permission('/edit/<photo_id')
     assert 'End of template' in str(excinfo.value)
 
 def test_parse_unnamed():
-    perms = Permissions('kite+perm://app.flywithkite.com')
+    perms = Permissions('intrustd+perm://app.intrustd.com')
 
     with pytest.raises(ValueError) as excinfo:
         TestPerm = perms.permission('/edit/<>')
     assert 'Empty string' in str(excinfo.value)
 
 def test_parse_invalidchar():
-    perms = Permissions('kite+perm://app.flywithkite.com')
+    perms = Permissions('intrustd+perm://app.intrustd.com')
 
     with pytest.raises(ValueError) as excinfo:
         TestPerm = perms.permission('/edit/<hello-world>')
     assert 'Invalid character - in' in str(excinfo.value)
 
 def test_parse_validate_arg():
-    perms = Permissions('kite+perm://app.flywithkite.com')
+    perms = Permissions('intrustd+perm://app.intrustd.com')
 
     with pytest.raises(ValueError) as excinfo:
         TestPerm = perms.permission('/edit/<hello-world ~"[A-Za-z0-9]{32}">')
     assert 'Invalid character - in' in str(excinfo.value)
 
 def test_parse_validator_invalidchar():
-    perms = Permissions('kite+perm://app.flywithkite.com')
+    perms = Permissions('intrustd+perm://app.intrustd.com')
 
     with pytest.raises(ValueError) as excinfo:
         TestPerm = perms.permission('/edit/<hello_world test@blah:"[A-Za-z0-9]{32}">')
     assert 'Invalid character @ in' in str(excinfo.value)
 
 def test_parse_dup():
-    perms = Permissions('kite+perm://app.flywithkite.com')
+    perms = Permissions('intrustd+perm://app.intrustd.com')
 
     with pytest.raises(ValueError) as excinfo:
         TestPerm = perms.permission('/edit/<photo_id>/blah/<photo_id>/blah/<okay>')
@@ -120,14 +120,14 @@ def test_escape_char():
     assert res[1].validator.regex_str == '[A-Z]{32}\n'
 
 def test_re():
-    perms = Permissions('kite+perm://app.flywithkite.com')
+    perms = Permissions('intrustd+perm://app.intrustd.com')
 
     TestPerm = perms.permission('/edit/<photo_id ~\'[A-Za-z0-9]{32}\'>/blah/<what ~"foo|bar">')
 
     assert perms.parse_perm('/comment/1pfnq9v0cg42v9xz5xd1whn9l0iygdhlwrmvaljwxdkx8l2wyrkx/blah/bar') is None
     assert perms.parse_perm('/edit/1pfnq9v0cg42v9xz5xd1whn9l0iygdhl/blah/foo') == \
         TestPerm(photo_id='1pfnq9v0cg42v9xz5xd1whn9l0iygdhl', what='foo')
-    assert TestPerm(what='bar').pattern == 'kite+perm://app.flywithkite.com/edit/<photo_id ~\'[A-Za-z0-9]{32}\'>/blah/bar'
+    assert TestPerm(what='bar').pattern == 'intrustd+perm://app.intrustd.com/edit/<photo_id ~\'[A-Za-z0-9]{32}\'>/blah/bar'
 
 def test_mkperm():
     mk = mkperm(CommentPerm, photo_id=Placeholder('image_hash'))

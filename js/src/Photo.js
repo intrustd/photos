@@ -5,14 +5,13 @@ import './Photos.scss';
 
 import 'font-awesome/scss/font-awesome.scss';
 
-import { mintToken } from 'stork-js';
-import { streamsExample } from 'stork-js/src/polyfill/Streams.js';
+import { install, mintToken } from 'intrustd-js';
+import { streamsExample } from 'intrustd-js/src/polyfill/Streams.js';
 
 import Albums from './Albums';
 import Gallery from './Gallery';
 import Navbar from './Navbar';
-import { KITE_URL, makeAbsoluteUrl } from './PhotoUrl.js';
-import { installKite } from 'stork-js';
+import { INTRUSTD_URL, makeAbsoluteUrl } from './PhotoUrl.js';
 
 import { Map, Set, OrderedSet } from 'immutable';
 import react from 'react';
@@ -23,16 +22,16 @@ import { HashRouter as Router,
 
 import './photos.svg';
 
-installKite({permissions: [ "kite+perm://photos.flywithkite.com/comment",
-                            "kite+perm://photos.flywithkite.com/comment/transfer",
-			    "kite+perm://photos.flywithkite.com/upload",
-			    "kite+perm://photos.flywithkite.com/view",
-                            "kite+perm://photos.flywithkite.com/view/transfer",
-			    "kite+perm://photos.flywithkite.com/gallery",
-                            "kite+perm://photos.flywithkite.com/gallery/transfer",
-                            "kite+perm://admin.flywithkite.com/guest/transfer" ],
-             appName: 'photos.flywithkite.com',
-             requiredVersion: '0.1.1547832238' })
+install({permissions: [ "intrustd+perm://photos.intrustd.com/comment",
+                        "intrustd+perm://photos.intrustd.com/comment/transfer",
+			"intrustd+perm://photos.intrustd.com/upload",
+			"intrustd+perm://photos.intrustd.com/view",
+                        "intrustd+perm://photos.intrustd.com/view/transfer",
+			"intrustd+perm://photos.intrustd.com/gallery",
+                        "intrustd+perm://photos.intrustd.com/gallery/transfer",
+                        "intrustd+perm://admin.intrustd.com/guest/transfer" ],
+         appName: 'photos.intrustd.com',
+         requiredVersion: '0.1.1547832238' })
 
 class PhotoUpload {
     constructor(key, formData) {
@@ -78,7 +77,7 @@ class PhotoUpload {
             this.onProgress(progData)
         })
 
-        this.req.open('POST', KITE_URL + "/image", true)
+        this.req.open('POST', INTRUSTD_URL + "/image", true)
         this.req.send(this.formData)
     }
 }
@@ -170,7 +169,7 @@ class PhotoApp extends react.Component {
 
         console.log("search is ", search)
 
-        fetch(`${KITE_URL}/image${search}`,
+        fetch(`${INTRUSTD_URL}/image${search}`,
               { method: 'GET', cache: 'no-store' })
             .then((res) => res.json())
             .then(({ images, total }) => {
@@ -239,10 +238,10 @@ class PhotoApp extends react.Component {
 
         var oldDesc = image.description
 
-        console.log("requesting", `${KITE_URL}/image/${imageId}/description`)
+        console.log("requesting", `${INTRUSTD_URL}/image/${imageId}/description`)
 
         this.modifyImage(imageId, (image) => Object.assign({}, image, { loading: true, description: newDesc }))
-        fetch(`${KITE_URL}/image/${imageId}/description`,
+        fetch(`${INTRUSTD_URL}/image/${imageId}/description`,
               { method: 'PUT',
                 body: newDesc,
                 headers: {
@@ -267,9 +266,9 @@ class PhotoApp extends react.Component {
     }
 
     shareAll() {
-        return mintToken([ 'kite+perm://photos.flywithkite.com/gallery',
-                           'kite+perm://photos.flywithkite.com/view',
-                           'kite+perm://admin.flywithkite.com/guest' ],
+        return mintToken([ 'intrustd+perm://photos.intrustd.com/gallery',
+                           'intrustd+perm://photos.intrustd.com/view',
+                           'intrustd+perm://admin.intrustd.com/guest' ],
                          { format: 'query' })
             .then((tok) => makeAbsoluteUrl('#/', tok))
     }

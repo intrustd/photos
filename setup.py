@@ -3,12 +3,12 @@ from setuptools import setup, find_packages
 from os import path
 
 setup(
-    name="kite-photos",
+    name="intrustd-photos",
     version="0.1.0",
-    description="Kite Photo App",
+    description="Intrustd Photo App",
     packages=find_packages(),
     install_requires=["Flask>=0.2", "Pillow" ],
     entry_points={
-        'console_scripts': [ 'photos=kite.photo:main', 'photo-perms=kite.photo.perms:verify' ]
+        'console_scripts': [ 'photos=intrustd.photo:main', 'photo-perms=intrustd.photo.perms:verify' ]
     }
 )

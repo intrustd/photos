@@ -11,27 +11,27 @@ from enum import Enum, auto
 from re import sre_parse
 from copy import deepcopy
 
-KITE_TRANSFER_SUFFIX="/transfer"
-KITE_TRANSFER_ONCE_SUFFIX="/transfer_once"
+INTRUSTD_TRANSFER_SUFFIX="/transfer"
+INTRUSTD_TRANSFER_ONCE_SUFFIX="/transfer_once"
 def get_base_perm(perm):
-    while perm.endswith(KITE_TRANSFER_SUFFIX) or \
-        perm.endswith(KITE_TRANSFER_ONCE_SUFFIX):
+    while perm.endswith(INTRUSTD_TRANSFER_SUFFIX) or \
+        perm.endswith(INTRUSTD_TRANSFER_ONCE_SUFFIX):
 
-        if perm.endswith(KITE_TRANSFER_SUFFIX):
-            perm = perm[:-len(KITE_TRANSFER_SUFFIX)]
+        if perm.endswith(INTRUSTD_TRANSFER_SUFFIX):
+            perm = perm[:-len(INTRUSTD_TRANSFER_SUFFIX)]
         else:
-            perm = perm[:-len(KITE_TRANSFER_ONCE_SUFFIX)]
+            perm = perm[:-len(INTRUSTD_TRANSFER_ONCE_SUFFIX)]
 
     return perm
 
-class KitePermSchemaMismatchError(Exception):
+class PermSchemaMismatchError(Exception):
     def __init__(self, got):
         self.actual_schema = got
 
     def __str__(self):
-        return "Expected kite+perm as URL scheme, got '{}'".format(self.actual_schema)
+        return "Expected intrustd+perm as URL scheme, got '{}'".format(self.actual_schema)
 
-class KitePermAppMismatchError(Exception):
+class PermAppMismatchError(Exception):
     def __init__(self, expected, actual):
         self.expected = expected
         self.actual = actual
@@ -42,12 +42,12 @@ class KitePermAppMismatchError(Exception):
 
 def validate_permissions_url(url, hostname=None):
     res = urlparse(url)
-    if res.scheme != 'kite+perm':
+    if res.scheme != 'intrustd+perm':
         if hostname is None or res.hostname is not None:
-            raise KitePermSchemaMismatchError(res.scheme)
+            raise PermSchemaMismatchError(res.scheme)
         else:
             res = res._replace(netloc=hostname,
-                               scheme='kite+perm')
+                               scheme='intrustd+perm')
 
     return res._replace(path=res.path.rstrip('/'))
 
@@ -504,11 +504,11 @@ class Permissions(object):
 
     def parse_perm(self, perm_str):
         res = urlparse(perm_str)
-        if len(res.scheme) > 0 and res.scheme != 'kite+perm':
-            raise ValueError("Expected kite+perm scheme")
+        if len(res.scheme) > 0 and res.scheme != 'intrustd+perm':
+            raise ValueError("Expected intrustd+perm scheme")
 
         if res.hostname is not None and res.hostname != self.url.hostname:
-            raise KitePermAppMismatchError(self.url.hostname, res.hostname)
+            raise PermAppMismatchError(self.url.hostname, res.hostname)
 
         perm_str = get_base_perm(res.path)
 
@@ -532,7 +532,7 @@ class Permissions(object):
         from flask import request
         return request.remote_addr
 
-    def get_current_permissions(self, requestor_id=None, app_endpoint='http://admin.flywithkite.com.kite.local'):
+    def get_current_permissions(self, requestor_id=None, app_endpoint='http://admin.intrustd.com.app.local'):
         from werkzeug.exceptions import NotFound, Unauthorized
 
         if requestor_id is None:
@@ -619,7 +619,7 @@ class Permissions(object):
                 if perm is None:
                     print()
                 else:
-                    print(json.dumps(perm.kite_description))
+                    print(json.dumps(perm.intrustd_description))
         elif args.action == "check":
             existing = self.set()
 
@@ -643,7 +643,7 @@ class Permissions(object):
                 else:
                     try:
                         perm = self.parse_perm(line)
-                    except KitePermAppMismatchError:
+                    except PermAppMismatchError:
                         continue
 
                     if perm is None:
@@ -675,7 +675,7 @@ class Permissions(object):
                 else:
                     try:
                         perm = self.parse_perm(line)
-                    except KitePermAppMismatchError:
+                    except PermAppMismatchError:
                         continue
 
                     if perm is None:
@@ -822,7 +822,7 @@ class Permission(object):
             raise TypeError("Expected str or Permission")
 
     @property
-    def kite_description(self):
+    def intrustd_description(self):
         return { 'name': self.spec, # TODO fill these in properly
                  'description': 'TODO',
                  'needs_site': False,

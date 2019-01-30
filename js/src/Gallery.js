@@ -2,9 +2,9 @@ import React from 'react';
 
 import Navbar from './Navbar.js';
 
-import { mintToken } from 'stork-js';
-import { KiteImage, KiteLoadingIndicator } from 'stork-js/src/react.js';
-import { KITE_URL, makeAbsoluteUrl } from './PhotoUrl.js';
+import { mintToken } from 'intrustd-js';
+import { Image, LoadingIndicator } from 'intrustd-js/src/react.js';
+import { INTRUSTD_URL, makeAbsoluteUrl } from './PhotoUrl.js';
 
 import { Route, Link, withRouter } from 'react-router-dom';
 import { MentionsInput, Mention } from 'react-mentions';
@@ -120,7 +120,7 @@ class ImageTile extends React.Component {
     }
 
     searchTags(search, cb) {
-        var baseUrl = 'kite+app://photos.flywithkite.com/tag'
+        var baseUrl = `${INTRUSTD_URL}/tag`
         if ( search.length > 0 )
             baseUrl += `?query=${encodeURIComponent(search)}`
         fetch(baseUrl)
@@ -212,14 +212,14 @@ class ImageTile extends React.Component {
                                   height: `${this.props.photo.height}px`,
                                   margin: `${this.props.margin}px` },
                          onClick: () => { this.onClick() } },
-                 E(KiteImage, {src: `${KITE_URL}/image/${this.props.photo.id}?size=${size}`,
-                               style: {  width: `${this.props.photo.width}px`,
-                                         height: `${this.props.photo.height}px` },
-                               onFirstLoad: () => {
-                                   setTimeout(() => { this.setState({loaded: true}) },
-                                              200 * this.props.index)
-                               },
-                               className: 'ph-gallery-image uk-card-media-top'}),
+                 E(Image, {src: `${INTRUSTD_URL}/image/${this.props.photo.id}?size=${size}`,
+                           style: {  width: `${this.props.photo.width}px`,
+                                     height: `${this.props.photo.height}px` },
+                           onFirstLoad: () => {
+                               setTimeout(() => { this.setState({loaded: true}) },
+                                          200 * this.props.index)
+                           },
+                           className: 'ph-gallery-image uk-card-media-top'}),
                  E('div', { className: 'ph-image-selector',
                             onClick: (e) => { e.stopPropagation(); this.props.onSelect() } },
                    E('div', {className: 'ph-image-selector-check'},
@@ -303,8 +303,8 @@ class SlideshowImpl extends React.Component {
                   E(Link, { to: this.props.parentRoute }, 'Click here to go back'))
         } else {
             imgComp =
-                 E(KiteImage, { className: 'slide',
-                                src: `${KITE_URL}/image/${curImage.id}` })
+                 E(Image, { className: 'slide',
+                            src: `${INTRUSTD_URL}/image/${curImage.id}` })
         }
 
         return E('div', { className: 'slideshow' },
@@ -377,10 +377,10 @@ export default class Gallery extends React.Component {
     }
 
     shareSelected() {
-        var perms = this.state.selected.toArray().map((img) => `kite+perm://photos.flywithkite.com/view/${img}`)
+        var perms = this.state.selected.toArray().map((img) => `intrustd+perm://photos.intrustd.com/view/${img}`)
 
-        perms.push('kite+perm://photos.flywithkite.com/gallery')
-        perms.push('kite+perm://admin.flywithkite.com/guest')
+        perms.push('intrustd+perm://photos.intrustd.com/gallery')
+        perms.push('intrustd+perm://admin.intrustd.com/guest')
 
         return mintToken(perms,  { format: 'query' })
                  .then((tok) => makeAbsoluteUrl('#/', tok))
@@ -440,7 +440,7 @@ export default class Gallery extends React.Component {
             if ( this.props.hasMore )
                 visibilitySensor = E(VisibilitySensor, { onChange: this.onLoadIndicatorVisible.bind(this) },
                                      E('div', { className: 'ph-gallery-loading-indicator' },
-                                       E(KiteLoadingIndicator)))
+                                       E(LoadingIndicator)))
 
             gallery =
                 [ E(reactGallery,

@@ -26,7 +26,7 @@ let grpc-io-tools = ps: ps.buildPythonPackage rec {
     python = pkgs.python3;
 
     photo-app = python.pkgs.buildPythonPackage rec {
-      pname = "kite-photo";
+      pname = "intrustd-photo";
       version = "0.1.0";
 
       src = ./.;
@@ -36,27 +36,27 @@ let grpc-io-tools = ps: ps.buildPythonPackage rec {
       propagatedBuildInputs = with python.pkgs; [ flask sqlalchemy requests pillow ];
 
       meta = {
-        homepage = "https://flywithkite.com";
-        description = "Kite Photos App";
+        homepage = "https://photos.intrustd.com";
+        description = "Intrustd Photos App";
       };
     };
 
 in {
 
-  kite.version.major = 0;
-  kite.version.minor = 1;
+  app.version.major = 0;
+  app.version.minor = 1;
 
-  kite.meta = {
+  app.meta = {
      slug = "photos";
-     name = "Kite Photos";
+     name = "Intrustd Photos";
      authors = [ "Travis Athougies <travis@athougies.net>" ];
-     app-url = "https://photos.flywithkite.com/";
-     icon = "https://photos.flywithkite.com/images/photos.svg";
+     app-url = "https://photos.intrustd.com/";
+     icon = "https://photos.intrustd.com/images/photos.svg";
   };
 
-  kite.identifier = "photos.flywithkite.com";
+  app.identifier = "photos.intrustd.com";
 
-  kite.services.photo = {
+  app.services.photo = {
     name = "photo";
     autostart = true;
 
@@ -65,13 +65,13 @@ in {
     '';
   };
 
-  kite.environment = {
-    KITEPHOTOS = "/kite/";
+  app.environment = {
+    INTRUSTDPHOTOS = "/intrustd/";
   };
 
-  kite.permsHook = "${photo-app}/bin/photo-perms";
+  app.permsHook = "${photo-app}/bin/photo-perms";
 
-  kite.permissions = [
+  app.permissions = [
     { name = "comment";
       description = "Comment on photos"; }
 
@@ -89,16 +89,4 @@ in {
       dynamic = true; }
   ];
 
-#  kite.startHook = ''
-#    export KITEPHOTOS=/kite/
-#    exec ${photo-app}/bin/photos
-#  '';
-#
-#  kite.healthCheckHook = ''
-#    if echo | socat - TCP4:localhost:50051,connect-timeout=2; then
-#      exit 0;
-#    else
-#      exit 1;
-#    fi
-#  '';
 }

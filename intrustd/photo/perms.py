@@ -1,6 +1,6 @@
-from kite.permissions import Permissions
+from intrustd.permissions import Permissions
 
-perms = Permissions('kite+perm://photos.flywithkite.com')
+perms = Permissions('intrustd+perm://photos.intrustd.com')
 
 CommentAllPerm = perms.permission('/comment')
 ViewAllPerm = perms.permission('/view')
@@ -32,7 +32,7 @@ class CommentPerm(object):
 def image_thumbnail_gallery(imgs):
     gallery = []
     for img in imgs:
-        gallery.append('![{img}](kite+app://photos.flywithkite.com/image/{img})'.format(img=img))
+        gallery.append('![{img}](intrustd+app://photos.intrustd.com/image/{img})'.format(img=img))
 
     return '\n'.join(gallery)
 

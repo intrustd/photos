@@ -3,7 +3,7 @@ from datetime import datetime
 
 def get_photo_dir(inner=None, absolute=False):
     if inner is None:
-        ret = os.getenv('KITEPHOTOS')
+        ret = os.getenv('INTRUSTDPHOTOS')
     else:
         ret = os.path.join(get_photo_dir(), inner)
 

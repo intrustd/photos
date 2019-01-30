@@ -1,9 +1,9 @@
 import React from 'react';
 
 import Navbar from './Navbar.js';
-import { KITE_URL } from './PhotoUrl.js';
+import { INTRUSTD_URL } from './PhotoUrl.js';
 
-import { StorkImage } from 'stork-js/src/react.js';
+import { Image } from 'intrustd-js/src/react.js';
 import { Link } from 'react-router-dom';
 
 import './Albums.scss';
@@ -35,7 +35,7 @@ export default class Albums extends React.Component {
 
     componentDidMount() {
         console.log("on create")
-        fetch(KITE_URL + '/albums',
+        fetch(INTRUSTD_URL + '/albums',
               { method: 'GET' })
             .then((res) => res.json())
             .then((result) => this.setState({albums: result}))
@@ -44,7 +44,7 @@ export default class Albums extends React.Component {
 //        view: () => {
 //            console.log('albums', albums)
 //            return [ m(Navbar),
-//                     m(StorkImage, {src: KITE_URL + '/image' }),
+//                     m(Image, {src: INTRUSTD_URL + '/image' }),
 //                     m("div.albums.uk-flex.uk-flex-wrap",
 //                       albums.map((album) => {
 //                           return m(AlbumIcon, album)

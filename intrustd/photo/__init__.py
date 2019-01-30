@@ -17,7 +17,7 @@ from .util import get_photo_dir, get_photo_path, parse_json_datetime, datetime_s
 from .schema import session_scope, Photo, PhotoTag
 from .perms import perms, CommentAllPerm, ViewAllPerm, GalleryPerm, UploadPerm, ViewPerm, CommentPerm
 
-from kite.permissions import Placeholder, mkperm
+from intrustd.permissions import Placeholder, mkperm
 
 def sha256_sum_file(fp):
     h = hashlib.sha256()

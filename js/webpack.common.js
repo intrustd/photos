@@ -61,7 +61,7 @@ module.exports = {
             hash: true,
             scripts: [ "index.js" ],
             links: [ "photo-app.css" ],
-            title: "Kite Photos"
+            title: "Intrustd Photos"
         }),
         new MiniCssExtractPlugin({
             filename: "bundle.css"
