@@ -4,7 +4,7 @@ let nodePkgSet = import ./js { pkgs = pkgs.buildPackages; nodejs = pkgs.buildPac
 
     nodeDeps = (nodePkgSet.shell.override { bypassCache = true; }).nodeDependencies;
 
-in mkDerivation {
+in stdenv.mkDerivation {
   name = "photos-static";
   src = ./js;
 
