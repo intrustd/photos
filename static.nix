@@ -5,7 +5,7 @@ let nodePkgSet = import ./js { pkgs = pkgs.buildPackages; nodejs = pkgs.buildPac
     nodeDeps = (nodePkgSet.shell.override { bypassCache = true; }).nodeDependencies;
 
 in mkDerivation {
-  name = "admin-static";
+  name = "photos-static";
   src = ./js;
 
   nativeBuildInputs = with pkgs; [ nodeDeps nodejs-8_x ];
