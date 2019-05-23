@@ -25,15 +25,17 @@ let grpc-io-tools = ps: ps.buildPythonPackage rec {
 
     python = pkgs.python3;
 
+    py-intrustd = (import ./shell.nix { inherit pkgs; }).intrustd-py;
+
     photo-app = python.pkgs.buildPythonPackage rec {
       pname = "intrustd-photo";
       version = "0.1.0";
 
-      src = ./.;
+      src = ./.; # ./dist/intrustd-photos-0.1.0.tar.gz; # ./.;
 
       doCheck = false;
 
-      propagatedBuildInputs = with python.pkgs; [ flask sqlalchemy requests pillow ];
+      propagatedBuildInputs = with python.pkgs; [ flask sqlalchemy requests pillow py-intrustd ];
 
       meta = {
         homepage = "https://photos.intrustd.com";
@@ -64,6 +66,8 @@ in {
       exec ${photo-app}/bin/photos
     '';
   };
+
+  app.systemPackages = [ pkgs.ffmpeg ];
 
   app.environment = {
     INTRUSTDPHOTOS = "/intrustd/";

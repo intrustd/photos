@@ -13,14 +13,63 @@ import math
 from sqlalchemy import or_, and_, func
 from sqlalchemy.orm import aliased
 
+from .ffmpeg import ffprobe
 from .util import get_photo_dir, get_photo_path, parse_json_datetime, datetime_sql
-from .schema import session_scope, Photo, PhotoTag
+from .schema import session_scope, Photo, PhotoTag, VideoFormat
 from .perms import perms, CommentAllPerm, ViewAllPerm, GalleryPerm, UploadPerm, ViewPerm, CommentPerm
 
 from intrustd.permissions import Placeholder, mkperm
+from intrustd.tasks import schedule_command
+
+class VideoEncoding(object):
+    def __init__(self, name, width, height, bitrate=None,
+                 vbitrate=None, abitrate=None, bufsize=None):
+        self.name = name
+        self.width = width
+        self.height = height
+        self.bitrate = bitrate
+        self.vbitrate = vbitrate
+        self.abitrate = abitrate
+        self.bufsize = bufsize
+
+    def can_encode(self, width, height):
+        if width < height:
+            return self.can_encode(height, width)
+        else:
+            return self.width <= width and self.height <= height
+
+    def command(self, nm, width, height):
+        cmd = [ 'transcode-video', '{}.tmp'.format(nm),
+                '{}.hls'.format(nm),
+                '--max-bitrate', self.bitrate,
+                '--buf-size', self.bufsize,
+                '--width', str(self.width),
+                '--height', str(self.height),
+                '--video-bitrate', self.vbitrate,
+                '--audio-bitrate', self.abitrate,
+                '--stream-name', self.name ]
+
+        if width < height:
+            cmd.append['--rotate', '90']
+
+        return ' '.join(cmd)
+
+DEFAULT_VIDEO_STREAMS = [ VideoEncoding('360p', 640, 360, bitrate='856k',
+                                        vbitrate='800k', abitrate='96k',
+                                        bufsize='1200k'),
+                          VideoEncoding('480p', 842, 480, bitrate='1498k',
+                                        vbitrate='1400k', abitrate='128k',
+                                        bufsize='2100k'),
+                          VideoEncoding('720p', 1280, 720, bitrate='2996k',
+                                        vbitrate='2800k', abitrate='128k',
+                                        bufsize='4200k'),
+                          VideoEncoding('1080p', 1920, 1080, bitrate='5350k',
+                                        vbitrate='5000k', abitrate='192k',
+                                        bufsize='7500k') ]
 
 def sha256_sum_file(fp):
     h = hashlib.sha256()
+    fp.seek(0, os.SEEK_SET)
     while True:
         chunk = fp.read(1024)
         if len(chunk) == 0:
@@ -46,6 +95,7 @@ tag_re = re.compile('#\\[[#a-zA-Z0-9_\\-\'"]+\\]\\(([A-Za-z0-9_\\-\'"]+)\\)')
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = temp_photo_dir
+app.config['MAX_CONTENT_LENGTH'] = 4294967296
 # app.config['ALLOWED_EXTENSIONS'] = set(['jpg', 'jpeg', 'png', 'tiff', 'gif'])
 
 @app.route('/albums')
@@ -109,6 +159,111 @@ def _update_photo_dims(photo):
             width, height = im.size
             photo.width = width
             photo.height = height
+
+def _handle_video(uploaded):
+    video_id = sha256_sum_file(uploaded.stream)
+
+    with session_scope() as session:
+        existing = session.query(Photo).get(video_id)
+        if existing is not None:
+            return jsonify(existing.to_json())
+
+        video_path = '{}.tmp'.format(get_photo_dir(video_id))
+        uploaded.save(video_path)
+
+        try:
+            try:
+                info = ffprobe(video_path)
+            except Exception as e:
+                print("Got ffmpeg error", e, e.stderr)
+                abort(400)
+
+            # Make sure this has both a video and audio stream
+            vstreams = [ stream for stream in info['streams'] if stream['codec_type'] == 'video' ]
+            astreams = [ stream for stream in info['streams'] if stream['codec_type'] == 'audio' ]
+
+            if len(vstreams) == 0 or len(astreams) == 0:
+                abort(400)
+
+            # Only use first video stream
+            video = vstreams[0]
+            width = int(video['width'])
+            height = int(video['height'])
+
+            video = Photo(id=video_id,
+                          description="",
+                          width=width, height=height,
+                          video=True)
+            session.add(video)
+
+            vstreams = [vstream for vstream in DEFAULT_VIDEO_STREAMS
+                        if vstream.can_encode(width, height) ]
+
+            if len(vstreams) == 0:
+                vstreams = [ DEFAULT_VIDEO_STREAMS[0] ]
+
+            fmts = []
+            for vstream in vstreams:
+                fmt = VideoFormat(photo_id=video_id,
+                                  width=vstream.width,
+                                  height=vstream.height,
+                                  command=vstream.command(video_id, width, height),
+                                  queued=None)
+                fmts.append(fmt)
+
+            fmts.sort(key=lambda v:v.width)
+            print("Got vstreams", vstreams, fmts)
+            fmt = fmts[0]
+
+            task = schedule_command(fmt.command)
+            fmt.queued = task['id']
+
+            session.add_all(fmts)
+            session.commit()
+
+            return jsonify({"type": "video", "width": width, "height": height,
+                            "vstreams": vstreams, "astreams": astreams})
+
+        except:
+            os.unlink(video_path)
+            raise
+
+def _handle_photo(uploaded):
+    try:
+        with Image.open(uploaded.stream, 'r') as im:
+            pass
+    except IOError:
+        abort(400)
+
+    photo_id = sha256_sum_file(uploaded.stream)
+
+    uploaded.save(get_photo_dir(photo_id))
+
+    with session_scope() as session:
+        photo = session.query(Photo).get(photo_id)
+        if photo is None:
+            photo = Photo(id=photo_id,
+                          description="")
+            _update_photo_dims(photo)
+            session.add_all([photo])
+            session.commit()
+
+    return jsonify(photo.to_json())
+
+UPLOAD_HANDLERS = {
+    'image/jpeg': _handle_photo,
+    'image/jpg': _handle_photo,
+    'image/png': _handle_photo,
+    'image/bmp': _handle_photo,
+    'image/tiff': _handle_photo,
+    'image/webp': _handle_photo,
+
+    'video/mpeg': _handle_video,
+    'video/ogg': _handle_video,
+    'video/webm': _handle_video,
+    'video/3gpp': _handle_video,
+    'video/3gpp2': _handle_video
+}
 
 @app.route('/image', methods=['GET', 'POST'])
 @perms.require({ 'GET': GalleryPerm,
@@ -185,21 +340,12 @@ def upload(cur_perms=None):
             return abort(400)
 
         uploaded = request.files['photo']
-        photo_id = sha256_sum_file(uploaded.stream)
+        print("Content type", uploaded.content_type)
+        if uploaded.content_type not in UPLOAD_HANDLERS:
+            abort(400)
 
-        print("Saving fle as ", photo_id)
-        uploaded.save(get_photo_dir(photo_id))
+        return UPLOAD_HANDLERS[uploaded.content_type](uploaded)
 
-        with session_scope() as session:
-            photo = session.query(Photo).get(photo_id)
-            if photo is None:
-                photo = Photo(id=photo_id,
-                              description="")
-                _update_photo_dims(photo)
-                session.add_all([photo])
-                session.commit()
-
-            return jsonify(photo.to_json())
 
 @app.route('/image/<image_hash>/description', methods=['GET', 'PUT'])
 @perms.require({ 'GET': mkperm(ViewPerm, photo_id=Placeholder('image_hash')),

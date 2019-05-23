@@ -1,5 +1,5 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, \
-    func, create_engine
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, \
+    ForeignKey, func, create_engine
 from sqlalchemy.orm import relationship, sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 
@@ -20,6 +20,8 @@ class Photo(Base):
     width = Column(Integer, nullable=True)
     height = Column(Integer, nullable=True)
 
+    video = Column(Boolean, default=False)
+
     tags = relationship('PhotoTag', cascade='delete,delete-orphan')
 
     def to_json(self):
@@ -28,13 +30,28 @@ class Photo(Base):
                  'created': datetime_json(self.created_on),
                  'modified': datetime_json(self.modified_on),
                  'width': self.width,
-                 'height': self.height }
+                 'height': self.height,
+                 'type': 'video' if self.video else 'photo' }
 
 class PhotoTag(Base):
     __tablename__ = 'photo_tag'
 
     photo_id = Column(String(64), ForeignKey('photo.id'), primary_key=True)
     tag = Column(String, primary_key=True)
+
+class VideoFormat(Base):
+    __tablename__ = 'video_format'
+
+    photo_id = Column(String(64), ForeignKey('photo.id'), primary_key=True)
+    width = Column(Integer, primary_key=True)
+    height = Column(Integer, primary_key=True)
+
+    command = Column(String, nullable=True)
+    queued = Column(String, nullable=True)
+
+    @property
+    def is_complete(self):
+        return self.command is None
 
 class Version(Base):
     __tablename__ = 'version'
@@ -46,7 +63,7 @@ engine = create_engine("sqlite:///" + get_photo_dir(".photos.db", absolute=True)
 Session = sessionmaker(bind=engine)
 
 def do_migrate():
-    latest_version = 2
+    latest_version = 3
 
     session = Session()
     connection = engine.connect()
@@ -79,6 +96,18 @@ def do_migrate():
             ''')
             connection.execute('''
                ALTER TABLE photo ADD COLUMN height INTEGER
+            ''')
+
+        if version <= 2:
+            connection.execute('''
+               CREATE TABLE video_format(photo_id CHAR(64) NOT NULL,
+                                         width INTEGER NOT NULL,
+                                         height INTEGER NOT NULL,
+                                         command VARCHAR,
+                                         queued VARCHAR)
+            ''')
+            connection.execute('''
+               ALTER TABLE photo ADD COLUMN video BOOLEAN DEFAULT false
             ''')
 
         if version < latest_version:
