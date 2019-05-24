@@ -3,13 +3,13 @@
 let stdenv = pkgs.stdenv;
 
     # TODO figure out how to get node grpc plugin here
-    intrustd-py-srcs = ../../py;
-#      pkgs.fetchFromGitHub {
-#        owner = "intrustd";
-#        repo = "py-intrustd";
-#        rev = "623bf3b701f8381fad56c082e38b211f9d782474";
-#        sha256 = "042m5z1pcb1v6jz8qwqw7366md2gyrpblzpbs64iamfcwdx57sc0";
-#      };
+    intrustd-py-srcs =
+      pkgs.fetchFromGitHub {
+        owner = "intrustd";
+        repo = "py-intrustd";
+        rev = "8c06adab2aad479948b24da112cb7155df7a95de";
+        sha256 = "00y6i94qf2avz9976bz0nlippgnw8bi10xd4zypkz0gpdb1gw64p";
+      };
 
     intrustd-py = pkgs.callPackage intrustd-py-srcs { };
 

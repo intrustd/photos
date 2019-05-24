@@ -31,7 +31,7 @@ install({permissions: [ "intrustd+perm://photos.intrustd.com/comment",
                         "intrustd+perm://photos.intrustd.com/gallery/transfer",
                         "intrustd+perm://admin.intrustd.com/guest/transfer" ],
          appName: 'photos.intrustd.com',
-         requiredVersion: '0.1.1547832238' })
+         requiredVersion: '0.1.1554097246' })
 
 class PhotoUpload {
     constructor(key, formData) {
