@@ -7,8 +7,8 @@ let stdenv = pkgs.stdenv;
       pkgs.fetchFromGitHub {
         owner = "intrustd";
         repo = "py-intrustd";
-        rev = "8c06adab2aad479948b24da112cb7155df7a95de";
-        sha256 = "00y6i94qf2avz9976bz0nlippgnw8bi10xd4zypkz0gpdb1gw64p";
+        rev = "3ded67ad1d153f7d3e969fce2f26e5f737a2a1c8";
+        sha256 = "14dkz41n81vfppab2k4b8mc25ciqzwsr1wrw6slbsxi1znvdajsk";
       };
 
     intrustd-py = pkgs.callPackage intrustd-py-srcs { };

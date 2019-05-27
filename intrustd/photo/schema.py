@@ -5,6 +5,8 @@ from sqlalchemy.ext.declarative import declarative_base
 
 from contextlib import contextmanager
 
+from intrustd.tasks import get_scheduled_command_status
+
 from .util import get_photo_dir, datetime_json
 
 Base = declarative_base()
@@ -23,15 +25,42 @@ class Photo(Base):
     video = Column(Boolean, default=False)
 
     tags = relationship('PhotoTag', cascade='delete,delete-orphan')
+    video_formats = relationship('VideoFormat', cascade='delete,delete-orphan')
 
     def to_json(self):
-        return { 'id': self.id,
-                 'description': self.description,
-                 'created': datetime_json(self.created_on),
-                 'modified': datetime_json(self.modified_on),
-                 'width': self.width,
-                 'height': self.height,
-                 'type': 'video' if self.video else 'photo' }
+        r = { 'id': self.id,
+              'description': self.description,
+              'created': datetime_json(self.created_on),
+              'modified': datetime_json(self.modified_on),
+              'width': self.width,
+              'height': self.height,
+              'type': 'video' if self.video else 'photo' }
+
+        if self.video:
+            if any(not vf.is_complete for vf in self.video_formats):
+                # Calculate total
+                total = sum(vf.width for vf in self.video_formats)
+                complete = 0
+                for vf in self.video_formats:
+                    if vf.is_complete:
+                        complete += vf.width
+                    elif vf.queued is not None:
+                        try:
+                            sts = get_scheduled_command_status(vf.queued)
+                        except KeyError:
+                            continue
+
+                        if 'progress' in sts and isinstance(sts['progress'], dict) and \
+                           'data' in sts['progress'] and isinstance(sts['progress']['data'], dict):
+                            pr = sts['progress']['data']
+                            complete += vf.width * float(pr.get('cur_us', 0))/float(pr.get('total_us', 1))
+
+                r['progress'] = { 'total': total, 'complete': complete }
+
+            vf = [ vf for vf in self.video_formats if vf.is_complete ]
+            r['formats'] = [ vf.to_photo_json() for vf in self.video_formats if vf.is_complete ]
+
+        return r
 
 class PhotoTag(Base):
     __tablename__ = 'photo_tag'
@@ -48,6 +77,10 @@ class VideoFormat(Base):
 
     command = Column(String, nullable=True)
     queued = Column(String, nullable=True)
+
+    def to_photo_json(self):
+        return { 'width':  self.width,
+                 'height': self.height }
 
     @property
     def is_complete(self):

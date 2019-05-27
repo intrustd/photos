@@ -1,9 +1,10 @@
 import React from 'react';
+import Hls from 'hls.js';
 
 import Navbar from './Navbar.js';
 
 import { mintToken } from 'intrustd';
-import { Image, LoadingIndicator } from 'intrustd/src/react.js';
+import { Image, ImageHost, LoadingIndicator } from 'intrustd/src/react.js';
 import { INTRUSTD_URL, makeAbsoluteUrl } from './PhotoUrl.js';
 
 import { Route, Link, withRouter } from 'react-router-dom';
@@ -86,7 +87,8 @@ class ImageTile extends React.Component {
     constructor() {
         super()
 
-        this.state = { editingDescription: false }
+        this.state = { editingDescription: false,
+                       frame : 0 }
     }
 
     editDescription() {
@@ -132,6 +134,29 @@ class ImageTile extends React.Component {
                 return results
             })
             .then(cb)
+    }
+
+    startPreview() {
+        console.log("Start preview")
+        this.stopPreview()
+
+        this.previewTimer = setInterval(this.nextFrame.bind(this), 300)
+    }
+
+    stopPreview() {
+        if ( this.previewTimer )
+            clearInterval(this.previewTimer)
+        this.previewTimer = null
+
+        this.setState({frame: 0})
+    }
+
+    nextFrame() {
+        var frame = this.state.frame + 1
+        if ( frame >= 36 )
+            frame = 0
+
+        this.setState({ frame })
     }
 
     render () {
@@ -207,19 +232,59 @@ class ImageTile extends React.Component {
         var size = Math.ceil(Math.max(this.props.photo.width, this.props.photo.height))
         size = Math.max(100, Math.round(Math.pow(2, Math.ceil(Math.log(size)/Math.log(2)))))
 
+        var image, onMouseEnter, onMouseLeave
+
+        if ( this.props.photo.type == 'video' ) {
+            var progress
+
+            if ( this.props.photo.progress ) {
+                progress = [ E(LoadingIndicator),
+                             E('progress', { className: 'ph-gallery-conv-progress',
+                                             max: this.props.photo.progress.total,
+                                             value: this.props.photo.progress.complete }) ]
+            }
+
+            if ( !this.props.selected ) {
+                loadingClass = 'ph-gallery-image-card--loaded'
+            }
+
+            onMouseEnter = this.startPreview.bind(this)
+            onMouseLeave = this.stopPreview.bind(this)
+
+            var renderImg = (src) => {
+                var r = Math.floor(this.state.frame / 6)
+                var c = this.state.frame % 6
+
+                return E('div', { className: 'ph-gallery-image ph-gallery-image--video',
+                                  style: { backgroundImage: `url(${src})`,
+                                           width: `${this.props.photo.width}px`,
+                                           height: `${this.props.photo.height}px`,
+                                           backgroundSize: '600% 600%',
+                                           backgroundPosition: `${c * 100}% ${r * 100}%` } },
+                         progress,
+                         E('i',  { className: 'ph-gallery-image__video-icon fa fa-fw fa-play fa-5x' }) )
+            }
+
+            image = E(ImageHost, { src: `${INTRUSTD_URL}/image/${this.props.photo.id}/preview?size=${size}`,
+                                   renderLoad: renderImg, renderImg,
+                                   className: 'ph-gallery-image--video-preview' })
+        } else
+            image = E(Image, {src: `${INTRUSTD_URL}/image/${this.props.photo.id}?size=${size}`,
+                              style: {  width: `${this.props.photo.width}px`,
+                                        height: `${this.props.photo.height}px` },
+                              onFirstLoad: () => {
+                                  setTimeout(() => { this.setState({loaded: true}) },
+                                             200 * this.props.index)
+                              },
+                              className: 'ph-gallery-image uk-card-media-top'})
+
         return E('div', {className: `uk-card uk-card-default ph-gallery-image-card ${editingClass} ${loadingClass} ${selectedClass}`,
                          style: { width: `${this.props.photo.width}px`,
                                   height: `${this.props.photo.height}px`,
                                   margin: `${this.props.margin}px` },
-                         onClick: () => { this.onClick() } },
-                 E(Image, {src: `${INTRUSTD_URL}/image/${this.props.photo.id}?size=${size}`,
-                           style: {  width: `${this.props.photo.width}px`,
-                                     height: `${this.props.photo.height}px` },
-                           onFirstLoad: () => {
-                               setTimeout(() => { this.setState({loaded: true}) },
-                                          200 * this.props.index)
-                           },
-                           className: 'ph-gallery-image uk-card-media-top'}),
+                         onClick: this.onClick.bind(this),
+                         onMouseEnter, onMouseLeave },
+                 image,
                  E('div', { className: 'ph-image-selector',
                             onClick: (e) => { e.stopPropagation(); this.props.onSelect() } },
                    E('div', {className: 'ph-image-selector-check'},
@@ -233,6 +298,37 @@ class ImageTile extends React.Component {
                      this.props.photo.created,
                      savingIcon),
                    mkDescription()))
+    }
+}
+
+class HlsPlayer extends React.Component {
+    constructor() {
+        super()
+
+        this.videoRef = React.createRef()
+    }
+
+    componentDidMount() {
+        if ( Hls.isSupported ) {
+            console.log("Will play video")
+            this.hls = new Hls({enableWorker: false})
+            this.hls.loadSource(this.props.src)
+            this.hls.attachMedia(this.videoRef.current)
+            this.hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                console.log("Manifest parsed", this.videoRef.current)
+                setTimeout(() => { this.videoRef.current.play() }, 1000);
+            })
+            this.hls.on(Hls.Events.ERROR, (event, data) => {
+                console.log("Error event", event, data)
+            })
+        }
+    }
+
+    render() {
+        if ( Hls.isSupported ) {
+            return E('video', { key: 'video', ref: this.videoRef, controls: true })
+        } else
+            return 'Video not supported'
     }
 }
 
@@ -296,11 +392,14 @@ class SlideshowImpl extends React.Component {
     render() {
         var { curImage, prevImage, nextImage } = this.slide, imgComp
 
+        console.log("Got image", curImage)
         if ( curImage === null || curImage === undefined ) {
             imgComp =
                 E('p', { className: '' },
                   'This image was not found', E('br'),
                   E(Link, { to: this.props.parentRoute }, 'Click here to go back'))
+        } else if ( curImage.type == 'video' ) {
+            imgComp = E(HlsPlayer, { src: `${INTRUSTD_URL}/image/${curImage.id}` })
         } else {
             imgComp =
                  E(Image, { className: 'slide',

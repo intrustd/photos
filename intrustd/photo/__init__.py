@@ -1,7 +1,7 @@
 import time
 import hashlib
 
-from flask import Flask, jsonify, send_from_directory, send_file, request, abort
+from flask import Flask, jsonify, send_from_directory, send_file, request, abort, Response
 
 from PIL import Image
 
@@ -11,7 +11,7 @@ import re
 import math
 
 from sqlalchemy import or_, and_, func
-from sqlalchemy.orm import aliased
+from sqlalchemy.orm import aliased, joinedload
 
 from .ffmpeg import ffprobe
 from .util import get_photo_dir, get_photo_path, parse_json_datetime, datetime_sql
@@ -19,7 +19,10 @@ from .schema import session_scope, Photo, PhotoTag, VideoFormat
 from .perms import perms, CommentAllPerm, ViewAllPerm, GalleryPerm, UploadPerm, ViewPerm, CommentPerm
 
 from intrustd.permissions import Placeholder, mkperm
-from intrustd.tasks import schedule_command
+from intrustd.tasks import schedule_command, get_scheduled_command_status
+
+M3U8_MIMETYPE = 'application/x-mpegURL'
+MPEGTS_MIMETYPE = 'video/MP2T'
 
 class VideoEncoding(object):
     def __init__(self, name, width, height, bitrate=None,
@@ -32,14 +35,20 @@ class VideoEncoding(object):
         self.abitrate = abitrate
         self.bufsize = bufsize
 
+    def to_dict(self):
+        return { 'width': self.width,
+                 'height': self.height,
+                 'bitrate': self.bitrate,
+                 'name': self.name }
+
     def can_encode(self, width, height):
         if width < height:
             return self.can_encode(height, width)
         else:
             return self.width <= width and self.height <= height
 
-    def command(self, nm, width, height):
-        cmd = [ 'transcode-video', '{}.tmp'.format(nm),
+    def command(self, nm, width, height, preview=False):
+        cmd = [ '/bin/transcode-video', '{}.tmp'.format(nm),
                 '{}.hls'.format(nm),
                 '--max-bitrate', self.bitrate,
                 '--buf-size', self.bufsize,
@@ -47,7 +56,12 @@ class VideoEncoding(object):
                 '--height', str(self.height),
                 '--video-bitrate', self.vbitrate,
                 '--audio-bitrate', self.abitrate,
-                '--stream-name', self.name ]
+                '--stream-name', self.name,
+                '--intrustd-id', nm ]
+
+        if preview:
+            cmd.append("--gen-preview")
+            cmd.append("preview.jpg".format(nm))
 
         if width < height:
             cmd.append['--rotate', '90']
@@ -121,6 +135,73 @@ def round_size(size):
     new_size = int(2 ** math.ceil(math.log(size, 2)))
     return max(new_size, 100)
 
+@app.route('/image/<image_hash>/stream/<name>/<fragment>.ts')
+@perms.require(mkperm(ViewPerm, photo_id=Placeholder('image_hash')))
+def fragment(image_hash, name, fragment):
+    with session_scope() as session:
+        existing = session.query(Photo).get(image_hash)
+        if existing is None or not existing.video:
+            abort(404)
+
+        hls_dir = get_photo_path("{}.hls".format(image_hash), absolute=True)
+        frag = os.path.join(hls_dir, "{}_{}.ts".format(name, fragment))
+
+        rsp = send_file(frag)
+        rsp.headers['Cache-control'] = 'private, max-age=43200'
+        rsp.headers['Content-type'] = MPEGTS_MIMETYPE
+        return rsp
+
+@app.route('/image/<image_hash>/stream/<name>')
+@perms.require(mkperm(ViewPerm, photo_id=Placeholder('image_hash')))
+def stream(image_hash, name):
+    with session_scope() as session:
+        existing = session.query(Photo).get(image_hash)
+        if existing is None or not existing.video:
+            abort(404)
+
+        hls_dir = get_photo_path("{}.hls".format(image_hash), absolute=True)
+        playlist = os.path.join(hls_dir, "{}.m3u8".format(name))
+
+        def make_playlist():
+            with open(playlist, 'rt') as pl:
+                frag_ix = 0
+                for line in pl:
+                    if line.startswith('#'):
+                        yield line
+                    if line.startswith('#EXTINF'):
+                        yield 'intrustd+app://photos.intrustd.com/image/{}/stream/{}/{:04d}.ts\n'.format(image_hash, name, frag_ix)
+                        frag_ix += 1
+
+        rsp = Response(make_playlist(), mimetype=M3U8_MIMETYPE)
+        rsp.headers['Cache-control'] = 'private, max-age=43200'
+        rsp.headers['ETag'] = "{}-{}".format(image_hash, name)
+        return rsp
+
+@app.route('/image/<image_hash>/preview')
+@perms.require(mkperm(ViewPerm, photo_id=Placeholder('image_hash')))
+def video_preview(image_hash=None):
+    if image_hash is None:
+        abort(404)
+
+    with session_scope() as session:
+        existing = session.query(Photo).get(image_hash)
+        if existing is None:
+            abort(404)
+
+        if not existing.video:
+            abort(404)
+
+        hls_dir = get_photo_path("{}.hls".format(image_hash))
+        preview = os.path.join(hls_dir, "preview.jpg")
+
+        if os.path.exists(preview):
+            rsp = send_file(preview)
+            rsp.headers['Cache-control'] = 'private, max-age=43200'
+            return rsp
+
+        else:
+            abort(404)
+
 @app.route('/image/<image_hash>')
 @perms.require(mkperm(ViewPerm, photo_id=Placeholder('image_hash')))
 def image(image_hash=None):
@@ -137,20 +218,46 @@ def image(image_hash=None):
 
             size = round_size(size)
 
-        orig_path = get_photo_path(image_hash, absolute=True)
-        photo_path = get_photo_path(image_hash, size=size, absolute=True)
+        with session_scope() as session:
+            existing = session.query(Photo).get(image_hash)
+            if existing is None:
+                return 'Not found', 404
 
-        if os.path.exists(orig_path):
+            if existing.video:
+                hls_dir = get_photo_path("{}.hls".format(image_hash), absolute=True)
+                vfs = [ vf for vf in existing.video_formats if vf.is_complete ]
+                if len(vfs) == 0:
+                    return 'No format available', 404
 
-            if not os.path.exists(photo_path):
-                auto_resize(size, orig_path, photo_path)
+                hls = '''#EXTM3U
+#EXT-X-VERSION:3
+'''
+                for vf in vfs:
+                    hls += '#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION={}x{}\n'.format(vf.width, vf.height)
+                    hls += 'intrustd+app://photos.intrustd.com/image/{}/stream/{}p\n'.format(image_hash, vf.height)
 
-            rsp = send_file(photo_path)
-            rsp.headers['Cache-control'] = 'private, max-age=43200'
-            rsp.headers['ETag'] = image_hash if size is None else "{}@{}".format(image_hash, size)
-            return rsp
-        else:
-            return abort(404)
+                r = Response(hls)
+                r.headers['Content-type'] = M3U8_MIMETYPE
+                r.headers['ETag'] = image_hash
+                r.headers['Cache-control'] = 'private, max-age=43200'
+                return r
+            else:
+
+                orig_path = get_photo_path(image_hash, absolute=True)
+                photo_path = get_photo_path(image_hash, size=size, absolute=True)
+
+                if os.path.exists(orig_path):
+
+                    if not os.path.exists(photo_path):
+                        auto_resize(size, orig_path, photo_path)
+
+                    rsp = send_file(photo_path)
+                    rsp.headers['Cache-control'] = 'private, max-age=43200'
+                    rsp.headers['ETag'] = image_hash if size is None else "{}@{}".format(image_hash, size)
+                    return rsp
+
+                else:
+                    return abort(404)
 
 def _update_photo_dims(photo):
     path = get_photo_path(photo.id)
@@ -175,15 +282,16 @@ def _handle_video(uploaded):
             try:
                 info = ffprobe(video_path)
             except Exception as e:
-                print("Got ffmpeg error", e, e.stderr)
-                abort(400)
+                print("Got ffmpeg error", e)
+                return jsonify({'error': 'ffmpeg {}'.format(str(e))}), 400
 
             # Make sure this has both a video and audio stream
             vstreams = [ stream for stream in info['streams'] if stream['codec_type'] == 'video' ]
             astreams = [ stream for stream in info['streams'] if stream['codec_type'] == 'audio' ]
 
+            print("Got info", info)
             if len(vstreams) == 0 or len(astreams) == 0:
-                abort(400)
+                return jsonify({'error': 'no streams'}), 400
 
             # Only use first video stream
             video = vstreams[0]
@@ -203,11 +311,12 @@ def _handle_video(uploaded):
                 vstreams = [ DEFAULT_VIDEO_STREAMS[0] ]
 
             fmts = []
-            for vstream in vstreams:
+            for i, vstream in enumerate(vstreams):
                 fmt = VideoFormat(photo_id=video_id,
                                   width=vstream.width,
                                   height=vstream.height,
-                                  command=vstream.command(video_id, width, height),
+                                  command=vstream.command(video_id, width, height,
+                                                          preview=i==0),
                                   queued=None)
                 fmts.append(fmt)
 
@@ -221,8 +330,7 @@ def _handle_video(uploaded):
             session.add_all(fmts)
             session.commit()
 
-            return jsonify({"type": "video", "width": width, "height": height,
-                            "vstreams": vstreams, "astreams": astreams})
+            return jsonify(video.to_json())
 
         except:
             os.unlink(video_path)
@@ -230,14 +338,14 @@ def _handle_video(uploaded):
 
 def _handle_photo(uploaded):
     try:
-        with Image.open(uploaded.stream, 'r') as im:
-            pass
+        im = Image.open(uploaded.stream, 'r')
     except IOError:
-        abort(400)
+        return jsonify({'error': 'invalid photo'}), 400
 
     photo_id = sha256_sum_file(uploaded.stream)
 
     uploaded.save(get_photo_dir(photo_id))
+    im.close()
 
     with session_scope() as session:
         photo = session.query(Photo).get(photo_id)
@@ -248,7 +356,7 @@ def _handle_photo(uploaded):
             session.add_all([photo])
             session.commit()
 
-    return jsonify(photo.to_json())
+        return jsonify(photo.to_json())
 
 UPLOAD_HANDLERS = {
     'image/jpeg': _handle_photo,
@@ -259,6 +367,8 @@ UPLOAD_HANDLERS = {
     'image/webp': _handle_photo,
 
     'video/mpeg': _handle_video,
+    'video/x-matroska': _handle_video,
+    'video/mp4': _handle_video,
     'video/ogg': _handle_video,
     'video/webm': _handle_video,
     'video/3gpp': _handle_video,
@@ -281,23 +391,23 @@ def upload(cur_perms=None):
 
             if after is not None:
                 if len(after) != 64 or any(c not in '0123456789abcdefABCDEF' for c in after):
-                    abort(400)
+                    return jsonify({'error': 'invalid ?after param'}), 400
 
             if after_date is not None:
                 after_date = parse_json_datetime(after_date)
 
             if (after is not None and after_date is None) or \
                (after is None and after_date is not None):
-                abort(400)
+                return jsonify({'error': 'both ?after and ?after_date must be set'}), 400
 
             if limit is not None:
                 try:
                     limit = int(limit)
                 except ValueError:
-                    abort(400)
+                    return jsonify({'error': '{} is not a number'.format(limit)}), 400
 
                 if limit < 0:
-                    abort(400)
+                    return jsonify({'error': 'negative limit'}), 400
 
                 limit = min(20, limit)
             else:
@@ -320,29 +430,37 @@ def upload(cur_perms=None):
                 photos = photos.filter(or_(Photo.created_on < datetime_sql(after_date),
                                            and_(Photo.created_on == datetime_sql(after_date), Photo.id > after)))
 
+            photos = photos.options(joinedload(Photo.tags)).\
+                options(joinedload(Photo.video_formats))
+
             photos = photos.order_by(Photo.created_on.desc(), Photo.id.asc())
 
             if limit is not None:
                 photos = photos[:limit]
 
-            for photo in photos:
-                if photo.width is None or photo.height is None:
-                    _update_photo_dims(photo)
+            ims = []
+            for p in photos:
+                if p.width is None or p.height is None:
+                    _update_photo_dims(p)
 
-            rsp = jsonify({ 'images': [p.to_json() for p in photos if ViewPerm(photo_id=p.id) in cur_perms or perms.debug],
+                if ViewPerm(photo_id=p.id) in cur_perms or perms.debug:
+                    ims.append(p.to_json())
+
+            rsp = jsonify({ 'images': ims,
                             'total': total_photos })
             rsp.headers['Cache-Control'] = 'no-cache'
 
             return rsp
 
     elif request.method == 'POST':
+        print("Got POST request")
         if 'photo' not in request.files:
-            return abort(400)
+            return jsonify({'error': 'expected an upload named photo'}), 400
 
         uploaded = request.files['photo']
         print("Content type", uploaded.content_type)
         if uploaded.content_type not in UPLOAD_HANDLERS:
-            abort(400)
+            return jsonify({'error': '{} is not an accepted content type'}), 415
 
         return UPLOAD_HANDLERS[uploaded.content_type](uploaded)
 

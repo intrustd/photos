@@ -9,6 +9,8 @@ setup(
     packages=['intrustd.photo'],
     install_requires=["Flask>=0.2", "Pillow" ],
     entry_points={
-        'console_scripts': [ 'photos=intrustd.photo:main', 'photo-perms=intrustd.photo.perms:verify' ]
+        'console_scripts': [ 'photos=intrustd.photo:main',
+                             'photo-perms=intrustd.photo.perms:verify',
+                             'transcode-video=intrustd.photo.transcode:main' ]
     }
 )

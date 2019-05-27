@@ -31,7 +31,7 @@ let grpc-io-tools = ps: ps.buildPythonPackage rec {
       pname = "intrustd-photo";
       version = "0.1.0";
 
-      src = ./.; #./dist/intrustd-photos-0.1.0.tar.gz; # ./.;
+      src = ./dist/intrustd-photos-0.1.0.tar.gz; # ./.;
 
       doCheck = false;
 
@@ -67,7 +67,7 @@ in {
     '';
   };
 
-  app.systemPackages = [ pkgs.ffmpeg ];
+  app.systemPackages = [ pkgs.ffmpeg photo-app ];
 
   app.environment = {
     INTRUSTDPHOTOS = "/intrustd/";
