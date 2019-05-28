@@ -13,7 +13,7 @@
     "font-awesome": "^4.7.0",
     "hls.js": "^0.12.4",
     "immutable": "^3.8.2",
-      "intrustd": "intrustd/js",
+    "intrustd": "intrustd/js",
     "react": "^16.5.2",
     "react-dom": "^16.5.2",
     "react-mentions": "^2.4.1",
