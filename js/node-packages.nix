@@ -2164,13 +2164,13 @@ let
         sha1 = "3a83a904e54353287874c564b7549386849a98c9";
       };
     };
-    "electron-to-chromium-1.3.137" = {
+    "electron-to-chromium-1.3.139" = {
       name = "electron-to-chromium";
       packageName = "electron-to-chromium";
-      version = "1.3.137";
+      version = "1.3.139";
       src = fetchurl {
-        url = "https://registry.npmjs.org/electron-to-chromium/-/electron-to-chromium-1.3.137.tgz";
-        sha512 = "kGi32g42a8vS/WnYE7ELJyejRT7hbr3UeOOu0WeuYuQ29gCpg9Lrf6RdcTQVXSt/v0bjCfnlb/EWOOsiKpTmkw==";
+        url = "https://registry.npmjs.org/electron-to-chromium/-/electron-to-chromium-1.3.139.tgz";
+        sha512 = "8cR7h6doIC/XLgPdsTM3BXpfWLzqrHS6jWrvWLsdZWZWFvVQQUJTbU/wUZsjRGK33OY5ZIiS1n6JbqowuWrmYg==";
       };
     };
     "elliptic-6.4.1" = {
@@ -3268,8 +3268,8 @@ let
       version = "1.0.0";
       src = fetchgit {
         url = "git://github.com/intrustd/js";
-        rev = "33db11979fca24e7de6eedc08de04b185c09c157";
-        sha256 = "45a2c87c56286f61eb9744f5a62f8e57e08da93da1c67a19d74f66ed6e7c631e";
+        rev = "271f10177dc931ad5d7d607c2ad1e3698ba6046c";
+        sha256 = "cdaf1bad1067f45f6edb7199b43e723964f9f47d7cb953ca5ed39b01a179fc72";
       };
     };
     "invariant-2.2.4" = {
@@ -3891,6 +3891,15 @@ let
       src = fetchurl {
         url = "https://registry.npmjs.org/lodash/-/lodash-4.17.11.tgz";
         sha512 = "cQKh8igo5QUhZ7lg38DYWAxMvjSAKG0A8wGSVimP07SIUEK2UO+arSRKbRZWtelMtN5V0Hkwh5ryOto/SshYIg==";
+      };
+    };
+    "lodash-es-4.17.11" = {
+      name = "lodash-es";
+      packageName = "lodash-es";
+      version = "4.17.11";
+      src = fetchurl {
+        url = "https://registry.npmjs.org/lodash-es/-/lodash-es-4.17.11.tgz";
+        sha512 = "DHb1ub+rMjjrxqlB3H56/6MXtm1lSksDp2rA2cNWjG8mlDUYFhUj3Di2Zn5IwSU87xLv8tNIQ7sSwE/YOX/D/Q==";
       };
     };
     "lodash._basecopy-3.0.1" = {
@@ -5243,6 +5252,15 @@ let
         sha1 = "9ec61f79049875707d69414596fd907a4d711e73";
       };
     };
+    "raf-schd-4.0.0" = {
+      name = "raf-schd";
+      packageName = "raf-schd";
+      version = "4.0.0";
+      src = fetchurl {
+        url = "https://registry.npmjs.org/raf-schd/-/raf-schd-4.0.0.tgz";
+        sha512 = "m7zq0JkIrECzw9mO5Zcq6jN4KayE34yoIS9hJoiZNXyOAT06PPA8PrR+WtJIeFW09YjUfNkMMN9lrmAt6BURCA==";
+      };
+    };
     "randombytes-2.1.0" = {
       name = "randombytes";
       packageName = "randombytes";
@@ -5304,6 +5322,15 @@ let
       src = fetchurl {
         url = "https://registry.npmjs.org/react-photo-gallery/-/react-photo-gallery-6.3.4.tgz";
         sha512 = "G3Trhk/DiGWQHV3ZtP9cNdaIT9ujybp/nNpzHrQLd3nijWaJqqGuGp73y+S3H5zx3DxQKlaOraTX9mdkXC08eA==";
+      };
+    };
+    "react-resize-detector-4.1.4" = {
+      name = "react-resize-detector";
+      packageName = "react-resize-detector";
+      version = "4.1.4";
+      src = fetchurl {
+        url = "https://registry.npmjs.org/react-resize-detector/-/react-resize-detector-4.1.4.tgz";
+        sha512 = "aceA2+5BtNjcbnmF0PzxPsBZhvM1rPKWWglxcx1TUIQI3Lng4DtB2ipLJ3o0w2LAbCbtWCFyO3EctikJzTowNQ==";
       };
     };
     "react-router-4.3.1" = {
@@ -5369,13 +5396,13 @@ let
         sha512 = "tQtKA9WIAhBF3+VLAseyMqZeBjW0AHJoxOtYqSUZNJxauErmLbVm2FW1y+J/YA9dUrAC39ITejlZWhVIwawkKw==";
       };
     };
-    "readable-stream-3.3.0" = {
+    "readable-stream-3.4.0" = {
       name = "readable-stream";
       packageName = "readable-stream";
-      version = "3.3.0";
+      version = "3.4.0";
       src = fetchurl {
-        url = "https://registry.npmjs.org/readable-stream/-/readable-stream-3.3.0.tgz";
-        sha512 = "EsI+s3k3XsW+fU8fQACLN59ky34AZ14LoeVZpYwmZvldCFo0r0gnelwF2TcMjLor/BTL5aDJVBMkss0dthToPw==";
+        url = "https://registry.npmjs.org/readable-stream/-/readable-stream-3.4.0.tgz";
+        sha512 = "jItXPLmrSR8jmTRmRWJXCnGJsfy85mB3Wd/uINMXA65yrnFo0cPClFIUWzo2najVNSl+mx7/4W8ttlLWJe99pQ==";
       };
     };
     "readdirp-2.2.1" = {
@@ -7311,7 +7338,7 @@ let
         ];
       })
       sources."ecc-jsbn-0.1.2"
-      sources."electron-to-chromium-1.3.137"
+      sources."electron-to-chromium-1.3.139"
       sources."elliptic-6.4.1"
       sources."emojis-list-2.1.0"
       sources."end-of-stream-1.4.1"
@@ -7614,6 +7641,7 @@ let
       })
       sources."locate-path-2.0.0"
       sources."lodash-4.17.11"
+      sources."lodash-es-4.17.11"
       sources."lodash._basecopy-3.0.1"
       sources."lodash._basetostring-3.0.1"
       sources."lodash._basevalues-3.0.0"
@@ -7821,6 +7849,7 @@ let
       sources."query-string-6.5.0"
       sources."querystring-0.2.0"
       sources."querystring-es3-0.2.1"
+      sources."raf-schd-4.0.0"
       sources."randombytes-2.1.0"
       sources."randomfill-1.0.4"
       sources."react-16.8.6"
@@ -7828,6 +7857,7 @@ let
       sources."react-is-16.8.6"
       sources."react-mentions-2.4.2"
       sources."react-photo-gallery-6.3.4"
+      sources."react-resize-detector-4.1.4"
       (sources."react-router-4.3.1" // {
         dependencies = [
           sources."hoist-non-react-statics-2.5.5"
@@ -7847,7 +7877,7 @@ let
           sources."path-exists-2.1.0"
         ];
       })
-      sources."readable-stream-3.3.0"
+      sources."readable-stream-3.4.0"
       (sources."readdirp-2.2.1" // {
         dependencies = [
           sources."isarray-1.0.0"

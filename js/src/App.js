@@ -33,7 +33,6 @@ class PhotoUpload {
     }
 
     start() {
-        console.log("Starting", this.formData.getAll('photo'))
         this.req = new XMLHttpRequest()
 
         this.req.addEventListener('load', () => {
@@ -127,6 +126,7 @@ class PhotoApp extends react.Component {
                        search: null }
         this.uploadKey = 0
         this.galleryRef = react.createRef()
+        this.navbarRef = react.createRef()
     }
 
     componentDidMount() {
@@ -152,8 +152,6 @@ class PhotoApp extends react.Component {
         if ( search.length > 0 )
             search = `?${search.join('&')}`
 
-        console.log("search is ", search)
-
         fetch(`${INTRUSTD_URL}/image${search}`,
               { method: 'GET', cache: 'no-store' })
             .then((res) => res.json())
@@ -162,7 +160,6 @@ class PhotoApp extends react.Component {
 
                 if ( append )
                     images = this.state.images.concat(images)
-                console.log("Images are ", images)
                 this.setState({ images, hasMore, imageCount: total })
             })
     }
@@ -190,7 +187,6 @@ class PhotoApp extends react.Component {
     }
 
     uploadCompletes(ulKey, photo) {
-        console.log("photo is", photo)
         setTimeout(() => {
             var newUploads =
                 this.state.uploads.filter((ul) => (ul.key != ulKey))
@@ -216,14 +212,12 @@ class PhotoApp extends react.Component {
         this.setState({images})
     }
 
-    onImageDescriptionChanged(imageId, newDesc) {
+    onImageDescriptionChanged(imageId, newDesc, tags) {
         var image = this.state.images.filter((img) => (img.id == imageId))
         if ( image.length == 0 ) return
         image = image[0]
 
         var oldDesc = image.description
-
-        console.log("requesting", `${INTRUSTD_URL}/image/${imageId}/description`)
 
         this.modifyImage(imageId, (image) => Object.assign({}, image, { loading: true, description: newDesc }))
         fetch(`${INTRUSTD_URL}/image/${imageId}/description`,
@@ -234,6 +228,8 @@ class PhotoApp extends react.Component {
                 } })
             .then((r) => {
                 if ( r.ok ) {
+                    if ( this.navbarRef.current )
+                        this.navbarRef.current.latestTags(tags)
                     this.modifyImage(imageId, (image) => Object.assign({}, image, {loading: false, description: newDesc }))
                 } else {
                     this.modifyImage(imageId, (image) => Object.assign({}, image, {loading: false, description: oldDesc }))
@@ -302,15 +298,17 @@ class PhotoApp extends react.Component {
 
     render() {
         const E = react.createElement;
-        console.log("Render", this.state.uploads)
+
         return E(Router, {},
                  E('div', null,
                    E(Navbar, { uploadPhoto: (fd) => this.uploadPhoto(fd),
+                               ref: this.navbarRef,
                                searchTags: this.state.searchTags,
                                selectTag: this.selectTag.bind(this),
                                imgCount: this.state.imageCount !== undefined ? this.state.imageCount : undefined,
                                selectedCount: this.state.selectedCount,
                                allSelected: this.state.images !== undefined && this.state.selectedCount == this.state.images.length,
+                               selectedTags: this.state.searchTags,
                                onSelectAll: this.doSelectAll.bind(this),
                                onShare: this.doShare.bind(this),
                                shareLink: this.state.shareLink }),

@@ -11,6 +11,7 @@ import { Route, Link, withRouter } from 'react-router-dom';
 import { MentionsInput, Mention } from 'react-mentions';
 import reactGallery from 'react-photo-gallery';
 import VisibilitySensor from 'react-visibility-sensor';
+import ReactResizeDetector from 'react-resize-detector';
 
 import './Gallery.scss';
 
@@ -102,11 +103,12 @@ class ImageTile extends React.Component {
             e.preventDefault();
             this.setState({ editingDescription: false })
         } else if ( e.keyCode == 13 ) {
-            this.props.onDescriptionSet(this.state.editingValue)
+            this.props.onDescriptionSet(this.state.editingValue, this.state.mentioned)
             e.stopPropagation();
             e.preventDefault();
             this.setState({ editingDescription: false,
-                            editingValue: undefined })
+                            editingValue: undefined,
+                            mentioned: undefined })
         }
     }
 
@@ -174,8 +176,9 @@ class ImageTile extends React.Component {
                     style: { suggestions: { 'backgroundColor': 'rgba(0,0,0,0.9)', 'position': 'fixed', zIndex: 10000 } },
                     suggestionsPortalHost: this.props.galleryNode,
                     onKeyDown: this.onTextAreaKey.bind(this),
-                    onChange: (e, newVal) => {
-                        this.setState({editingValue: newVal})
+                    onChange: (e, newVal, tags) => {
+                        var mentioned = tags.split(' ').map((tag) => { if ( tag.startsWith('#') ) return tag.slice(1); else return tag; })
+                        this.setState({editingValue: newVal, mentioned})
                     } },
                   E(Mention, { trigger: '#', type: 'tag',
                                data: this.searchTags.bind(this) })))
@@ -402,8 +405,13 @@ class SlideshowImpl extends React.Component {
             imgComp = E(HlsPlayer, { src: `${INTRUSTD_URL}/image/${curImage.id}` })
         } else {
             imgComp =
-                 E(Image, { className: 'slide',
-                            src: `${INTRUSTD_URL}/image/${curImage.id}` })
+                E(ReactResizeDetector, { handleWidth: true, handleHeight: true,
+                                         children: ({width, height}) => {
+                                             var size = Math.ceil(Math.max(width, height))
+                                             size = Math.max(100, Math.round(Math.pow(2, Math.ceil(Math.log(size)/Math.log(2)))))
+                                             console.log("Request size", size);
+                                             return E(Image, { src: `${INTRUSTD_URL}/image/${curImage.id}?size=${size}` })
+                                         }})
         }
 
         return E('div', { className: 'slideshow' },
@@ -411,13 +419,23 @@ class SlideshowImpl extends React.Component {
                  E('nav', { className: 'uk-navbar-container uk-light uk-navbar-transparent',
                             'uk-navbar': 'uk-navbar' },
                    E('div', { className: 'uk-navbar-center' },
-                     E('div', { className: `uk-navbar-item ${prevImage ? 'ss-nav-inactive' : ''}` },
+                     E('div', { className: `uk-navbar-item ${prevImage ? 'ss-nav-inactive' : ''}`,
+                                'uk-tooltip': 'title: Previous Image' },
                        E(Link, { to: (prevImage ? this.props.makeImageRoute(prevImage) : "") },
                          E('i', { className: 'fa fa-fw fa-3x fa-chevron-left' }))),
-                     E('div', { className: `uk-navbar-item ${nextImage ? 'ss-nav-inactive' : ''}` },
+                     E('div', { className: `uk-navbar-item ${nextImage ? 'ss-nav-inactive' : ''}`,
+                                'uk-tooltip': 'title: Next Image' },
                        E(Link, { to: (nextImage ? this.props.makeImageRoute(nextImage) : "") },
                          E('i', { className: 'fa fa-fw fa-3x fa-chevron-right' }))),
-                     E('div', { className: 'uk-navbar-item' },
+                     E('div', { className: 'uk-navbar-item',
+                                'uk-tooltip': 'title: Download' },
+                       E('a', { href: '#',
+                                onClick: (e) => { e.preventDefault();
+//                                                  this.
+                                                } },
+                         E('i', { className: 'fa fa-fw fa-3x fa-download' }))),
+                     E('div', { className: 'uk-navbar-item',
+                                'uk-tooltip': 'title: End Slideshow' },
                        E(Link, { to: this.props.parentRoute },
                          E('i', { className: 'fa fa-fw fa-3x fa-times-circle' })),
                       ))))
@@ -449,8 +467,8 @@ function ImageTileClosure({photo, index, margin}) {
                           onActivated: () => {
                               history.push(`${match.url}slideshow/${img.id}`)
                           },
-                          onDescriptionSet: (newDesc) => {
-                              gallery.props.onImageDescriptionChanged(img.id, newDesc)
+                          onDescriptionSet: (newDesc, tags) => {
+                              gallery.props.onImageDescriptionChanged(img.id, newDesc, tags)
                           } })
 }
 

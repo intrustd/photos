@@ -14,7 +14,8 @@ from sqlalchemy import or_, and_, func
 from sqlalchemy.orm import aliased, joinedload
 
 from .ffmpeg import ffprobe
-from .util import get_photo_dir, get_photo_path, parse_json_datetime, datetime_sql
+from .util import get_photo_dir, get_photo_path, parse_json_datetime, \
+    datetime_sql, datetime_json, NotModified
 from .schema import session_scope, Photo, PhotoTag, VideoFormat
 from .perms import perms, CommentAllPerm, ViewAllPerm, GalleryPerm, UploadPerm, ViewPerm, CommentPerm
 
@@ -92,16 +93,20 @@ def sha256_sum_file(fp):
         h.update(chunk)
     return h.hexdigest()
 
-def no_cache(fn):
-    def no_cache_wrapped(*args, **kwargs):
-        r = app.make_response(fn(*args, **kwargs))
-        if 'Cache-control' not in r.headers and \
-           request.method == 'GET':
-            r.headers['Cache-control'] = 'no-cache'
-        return r
+def cache_control(s):
+    def cache_control(fn):
+        def wrapped(*args, **kwargs):
+            r = app.make_response(fn(*args, **kwargs))
+            if 'Cache-control' not in r.headers and \
+               request.method == 'GET':
+                r.headers['Cache-control'] = s
+            return r
+        wrapped.__name__ = fn.__name__
+        return wrapped
+    return cache_control
 
-    no_cache_wrapped.__name__ = fn.__name__
-    return no_cache_wrapped
+no_cache = cache_control('no-cache')
+no_store = cache_control('no-store')
 
 temp_photo_dir = get_photo_dir('.tmp')
 
@@ -468,7 +473,7 @@ def upload(cur_perms=None):
 @app.route('/image/<image_hash>/description', methods=['GET', 'PUT'])
 @perms.require({ 'GET': mkperm(ViewPerm, photo_id=Placeholder('image_hash')),
                  'PUT': mkperm(CommentPerm, photo_id=Placeholder('image_hash')) })
-@no_cache
+@no_store
 def image_description(image_hash=None):
     if image_hash is None:
         return abort(404)
@@ -500,8 +505,8 @@ def image_description(image_hash=None):
 
 @app.route('/tag', methods=['GET'])
 @perms.require(GalleryPerm)
-@no_cache
-def tags():
+@no_store
+def tags(**kwargs):
     with session_scope() as session:
         query = request.args.get('query')
         try:
@@ -515,6 +520,36 @@ def tags():
             tags = tags.filter(PhotoTag.tag.like('%{}%'.format(query)))
 
         return jsonify([t.tag for t in tags.limit(limit).distinct()])
+
+@app.route('/tag/recent', methods=['GET'])
+@perms.require(GalleryPerm)
+@no_cache
+def recent_tags(**kwargs):
+    with session_scope() as session:
+        try:
+            limit = int(request.args.get('limit', 50))
+        except ValueError:
+            abort(400)
+
+        limit = min(100, limit)
+
+        if request.if_none_match:
+            last_modified = session.query(Photo.modified_on). \
+                order_by(Photo.modified_on.desc()).first()
+            if last_modified.modified_on is not None:
+                last_modified = last_modified.modified_on
+                expected_etag = "{}-{}".format(datetime_json(last_modified), limit)
+                if request.if_none_match == expected_etag:
+                    raise NotModified
+
+        recent = session.query(PhotoTag.tag, func.max(Photo.modified_on)) \
+                        .join(PhotoTag.photo).group_by(PhotoTag.tag)\
+                        .order_by(func.max(Photo.modified_on).desc())\
+                        .limit(limit)
+
+        return jsonify([t.tag for t in recent])
+
+@app.route('/tag', methods=['GET'])
 
 def main(debug = False, port=80):
     print("Starting server")

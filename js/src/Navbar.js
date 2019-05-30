@@ -5,12 +5,14 @@ import { debounce } from 'underscore';
 
 const E = React.createElement;
 
+const RECENT_TAG_COUNT = 15;
+
 class TagSearcher extends React.Component {
     constructor() {
         super()
 
         this.inputRef = React.createRef()
-        this.state = {}
+        this.state = { }
     }
 
     render() {
@@ -39,6 +41,26 @@ class TagSearcher extends React.Component {
     }
 }
 
+class RecentTags extends React.Component {
+    render() {
+        if ( this.props.recentTags ) {
+            return E('ul', { className: 'uk-nav uk-navbar-dropdown-menu uk-dropdown-nav ph-recent-tags' },
+                     E('li', { className: 'uk-nav-header' }),
+                     this.props.recentTags.map((t) => {
+                         var className = 'ph-recent-tags__tag';
+                         var selected = this.props.selectedTags.contains(t)
+                         if ( selected )
+                             className += ' ph-recent-tags__tag--selected';
+
+                         return E('li', { key: t, className,
+                                          onClick: () => { this.props.onSelect(t, !selected) } }, t)
+                     }))
+        } else {
+            return []
+        }
+    }
+}
+
 export default class Navbar extends React.Component {
     constructor () {
         super()
@@ -50,6 +72,19 @@ export default class Navbar extends React.Component {
         this.shareLink = null
         this.shareAllLink = null
         this.copyShareLink = null
+
+        this.state = { recentTags: null }
+    }
+
+    latestTags(tags) {
+        var newTags = [...tags]
+
+        this.state.recentTags.map((tag) => {
+            if ( newTags.find(tag) === undefined )
+                newTags.push(tag)
+        })
+
+        this.setState({recentTags: newTags.slice(0, RECENT_TAG_COUNT)});
     }
 
     doUpload(e) {
@@ -71,6 +106,15 @@ export default class Navbar extends React.Component {
 
         this.shareLink.addEventListener('click', () => { this.props.onShare('selected'); })
         this.shareAllLink.addEventListener('click', () => { this.props.onShare('all'); })
+
+        fetch(`${INTRUSTD_URL}/tag/recent?length=${RECENT_TAG_COUNT}`)
+            .then((r) => {
+                if ( r.ok ) {
+                    return r.json().then((recentTags) => this.setState({recentTags}))
+                } else {
+                    this.setState({ recentTags: [] })
+                }
+            })
     }
 
     componentDidUpdate() {
@@ -149,6 +193,17 @@ export default class Navbar extends React.Component {
                                               'title: Deselect all; pos: bottom' :
                                               'title: Select all; pos: bottom' ) },
                        E('i', { className: `fa fa-fw ${selectAllCheck}` }))),
+
+                   E('div', { className: 'uk-navbar-item ph-nav-icon' },
+                     E('a', { href: '#',
+                              className: 'ph-nav-link-default',
+                              onClick: () => { },
+                              'uk-tooltip': 'title: Tags; pos: bottom' },
+                       E('i', { className: 'fa fa-fw fa-tag' })),
+                     E('div', { 'uk-dropdown': 'mode: click' },
+                       E(RecentTags, { recentTags: this.state.recentTags,
+                                       onSelect: this.props.selectTag,
+                                       selectedTags: this.props.selectedTags }))),
 
                    E('div', { className: 'uk-navbar-item ph-nav-icon' },
                      E('div', { className: 'uk-inline' },

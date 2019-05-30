@@ -1,6 +1,14 @@
 import os
 from datetime import datetime
 
+import werkzeug
+import flask
+
+class NotModified(werkzeug.exceptions.HTTPException):
+    code = 304
+    def get_response(self, environment):
+        return flask.Response(status=304)
+
 def get_photo_dir(inner=None, absolute=False):
     if inner is None:
         ret = os.getenv('INTRUSTDPHOTOS')

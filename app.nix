@@ -31,7 +31,7 @@ let grpc-io-tools = ps: ps.buildPythonPackage rec {
       pname = "intrustd-photo";
       version = "0.1.0";
 
-      src = ./.; #./dist/intrustd-photos-0.1.0.tar.gz; # ./.;
+      src = ./dist/intrustd-photos-0.1.0.tar.gz; # ./.;
 
       doCheck = false;
 
@@ -46,7 +46,7 @@ let grpc-io-tools = ps: ps.buildPythonPackage rec {
 in {
 
   app.version.major = 0;
-  app.version.minor = 2;
+  app.version.minor = 3;
 
   app.meta = {
      slug = "photos";

@@ -68,6 +68,8 @@ class PhotoTag(Base):
     photo_id = Column(String(64), ForeignKey('photo.id'), primary_key=True)
     tag = Column(String, primary_key=True)
 
+    photo = relationship(Photo, primaryjoin=photo_id == Photo.id)
+
 class VideoFormat(Base):
     __tablename__ = 'video_format'
 
@@ -96,7 +98,7 @@ engine = create_engine("sqlite:///" + get_photo_dir(".photos.db", absolute=True)
 Session = sessionmaker(bind=engine)
 
 def do_migrate():
-    latest_version = 3
+    latest_version = 4
 
     session = Session()
     connection = engine.connect()
@@ -141,6 +143,11 @@ def do_migrate():
             ''')
             connection.execute('''
                ALTER TABLE photo ADD COLUMN video BOOLEAN DEFAULT false
+            ''')
+
+        if version <= 3:
+            connection.execute('''
+               CREATE INDEX photo_modified ON photo (modified_on)
             ''')
 
         if version < latest_version:

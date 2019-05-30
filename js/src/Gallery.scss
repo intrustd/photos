@@ -190,8 +190,8 @@ $indicator-border-color: #ccc;
     }
 
     .slide {
-        max-width: 100vw;
-        max-height: 100vh;
+        width: 100vw;
+        height: 100vh;
     }
 }
 
@@ -249,8 +249,15 @@ $indicator-border-color: #ccc;
 }
 
 .ph-tags-searcher__tag {
-    display: inline-block;
     margin: 8px 3px;
+}
+
+.ph-recent-tags__tag {
+    margin-right: 2px;
+}
+
+.ph-tags-searcher__tag, .ph-recent-tags__tag {
+    display: inline-block;
     border: 1px outset #207ce5;
     background-color: lighten(#207ce5, 40%);
     border-radius: 2px;
@@ -295,7 +302,7 @@ $indicator-border-color: #ccc;
     appearance: none;
 }
 
-.ph-image-description__tag--selected {
+.ph-image-description__tag--selected, .ph-recent-tags__tag--selected {
     background-color: #207ce5;
 }
 
