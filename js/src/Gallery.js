@@ -19,6 +19,8 @@ import { Set } from 'immutable';
 
 const E = React.createElement;
 
+const NUM_NEXT_SLIDES_TO_PRELOAD = 5;
+
 class MentionsParagraph extends React.Component {
     constructor() {
         super()
@@ -327,6 +329,10 @@ class HlsPlayer extends React.Component {
         }
     }
 
+    componentDidUnmount() {
+        this.hls.stopLoad()
+    }
+
     render() {
         if ( Hls.isSupported ) {
             return E('video', { key: 'video', ref: this.videoRef, controls: true })
@@ -368,24 +374,34 @@ class SlideshowImpl extends React.Component {
     }
 
     get slide() {
-        if ( this.curSlide !== null && this.curSlide.curImage.id == this.props.imageId ) {
+        if ( this.curSlide !== null && this.curSlide.curImage.id == this.props.imageId &&
+             this.curSlide.images === this.props.images ) {
             return this.curSlide
         } else {
             var curImageIx = this.props.images.findIndex((img) => (img.id == this.props.imageId))
             if ( curImageIx >= 0 ) {
-                var curImage = this.props.images[curImageIx]
+                var curImage = this.props.images.get(curImageIx)
                 var prevImage, nextImage
 
                 if ( curImageIx > 0 )
-                    prevImage = this.props.images[curImageIx - 1].id
+                    prevImage = this.props.images.get(curImageIx - 1).id
 
-                if ( curImageIx < (this.props.images.length - 1) )
-                    nextImage = this.props.images[curImageIx + 1].id
+                if ( curImageIx < (this.props.images.size - 1) )
+                    nextImage = this.props.images.get(curImageIx + 1).id
 
-                var nextSlide = { curImage, prevImage, nextImage }
+                console.log("Check slide", this.props.canLoadMore, Math.abs(curImageIx - this.props.images.size))
+                if ( this.props.canLoadMore && Math.abs(curImageIx - this.props.images.size) < NUM_NEXT_SLIDES_TO_PRELOAD ) {
+                    // Check if there's more
+                    setTimeout(this.props.loadMore, 0)
+                }
+
+                if ( this.props.canLoadMore && nextImage === undefined ) {
+                    nextImage = 'loading'
+                }
+
+                var nextSlide = { curImage, prevImage, nextImage, images: this.props.images }
                 this.curSlide = nextSlide
 
-                console.log('return', nextSlide)
                 return nextSlide
             } else
                 return { }
@@ -414,6 +430,17 @@ class SlideshowImpl extends React.Component {
                                          }})
         }
 
+        var nextImageBtn
+
+        if ( nextImage ) {
+            if ( nextImage != 'loading' ) {
+                nextImageBtn = E(Link, { to: (nextImage ? this.props.makeImageRoute(nextImage) : "") },
+                                 E('i', { className: 'fa fa-fw fa-3x fa-chevron-right' }))
+            } else {
+                nextImageBtn = E('a', { 'href': '#', 'disabled': true }, E('i', { className: 'fa fa-fw fa-3x fa-chevron-right' }))
+            }
+        }
+
         return E('div', { className: 'slideshow' },
                  imgComp,
                  E('nav', { className: 'uk-navbar-container uk-light uk-navbar-transparent',
@@ -424,9 +451,7 @@ class SlideshowImpl extends React.Component {
                        E(Link, { to: (prevImage ? this.props.makeImageRoute(prevImage) : "") },
                          E('i', { className: 'fa fa-fw fa-3x fa-chevron-left' }))),
                      E('div', { className: `uk-navbar-item ${nextImage ? 'ss-nav-inactive' : ''}`,
-                                'uk-tooltip': 'title: Next Image' },
-                       E(Link, { to: (nextImage ? this.props.makeImageRoute(nextImage) : "") },
-                         E('i', { className: 'fa fa-fw fa-3x fa-chevron-right' }))),
+                                'uk-tooltip': 'title: Next Image' }, nextImageBtn),
                      E('div', { className: 'uk-navbar-item',
                                 'uk-tooltip': 'title: Download' },
                        E('a', { href: '#',
@@ -533,6 +558,8 @@ export default class Gallery extends React.Component {
         if ( images )
             return E(Slideshow, { images, imageId: thisProps.match.params.imageId,
                                   makeImageRoute: (id) => `${match.url}slideshow/${id}`,
+                                  canLoadMore: this.props.loadedCount < this.props.imageCount,
+                                  loadMore: this.props.loadMore,
                                   parentRoute: match.url })
         else
             return E('span', {className: 'fa fa-spin fa-large fa-circle-o-notch'})
@@ -543,14 +570,14 @@ export default class Gallery extends React.Component {
 
         if ( this.props.images === undefined ) {
             gallery = E('div', { className: 'ph-gallery-loading' }, 'Loading')
-        } else if ( this.props.images.length == 0 ) {
+        } else if ( this.props.images.size == 0 ) {
             gallery = E('div', { className: 'ph-gallery-empty-msg' }, 'No images')
             galleryClass = 'ph-gallery-empty'
         } else {
             var photos =
                 this.props.images.map((img) =>
                     Object.assign({ src:img.id, key:img.id, gallery: this },
-                                  img))
+                                  img)).toArray()
 
             var visibilitySensor
 

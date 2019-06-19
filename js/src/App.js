@@ -8,7 +8,7 @@ import Gallery from './Gallery';
 import Navbar from './Navbar';
 import { INTRUSTD_URL, makeAbsoluteUrl } from './PhotoUrl.js';
 
-import { Map, Set, OrderedSet } from 'immutable';
+import { Map, Set, OrderedSet, List } from 'immutable';
 import react from 'react';
 import ReactDom from 'react-dom';
 import { HashRouter as Router,
@@ -138,12 +138,14 @@ class PhotoApp extends react.Component {
             .map((tag) => `tag[]=${encodeURIComponent(tag)}`)
         var append = false
 
+        console.log("Update images")
+
         if ( this.state.search !== null )
             search.push(`q=${encodeURIComponent(this.state.search)}`)
 
-        if ( this.state.images !== undefined && this.state.images.length > 0 ) {
-            search.push(`after_id=${this.state.images[this.state.images.length - 1].id}`)
-            search.push(`after_date=${this.state.images[this.state.images.length - 1].created}`)
+        if ( this.state.images !== undefined && this.state.images.size > 0 ) {
+            search.push(`after_id=${this.state.images.get(this.state.images.size - 1).id}`)
+            search.push(`after_date=${this.state.images.get(this.state.images.size - 1).created}`)
             append = true
         }
 
@@ -156,10 +158,12 @@ class PhotoApp extends react.Component {
               { method: 'GET', cache: 'no-store' })
             .then((res) => res.json())
             .then(({ images, total }) => {
-                var hasMore = images.length == 10
+                images = List(images)
+                var hasMore = images.size == 10
 
                 if ( append )
                     images = this.state.images.concat(images)
+
                 this.setState({ images, hasMore, imageCount: total })
             })
     }
@@ -196,8 +200,8 @@ class PhotoApp extends react.Component {
 
         if ( photo !== null ) {
             if ( this.state.images.every((im) => (im.id != photo.id)) ) {
-                var newImages = [ photo, ...this.state.images ]
-                this.setState({images: newImages})
+                var newImages = this.state.images.unshift(photo)
+                this.setState({images: newImages, imageCount: this.state.imageCount + 1})
             }
         }
     }
@@ -288,7 +292,7 @@ class PhotoApp extends react.Component {
 
     doSelectAll() {
         if ( this.galleryRef.current !== undefined && this.state.images !== undefined ) {
-            if ( this.state.selectedCount == this.state.images.length )
+            if ( this.state.selectedCount == this.state.images.size )
                 this.galleryRef.current.updateSelection(Set())
             else {
                 this.galleryRef.current.selectAll()
@@ -307,7 +311,7 @@ class PhotoApp extends react.Component {
                                selectTag: this.selectTag.bind(this),
                                imgCount: this.state.imageCount !== undefined ? this.state.imageCount : undefined,
                                selectedCount: this.state.selectedCount,
-                               allSelected: this.state.images !== undefined && this.state.selectedCount == this.state.images.length,
+                               allSelected: this.state.images !== undefined && this.state.selectedCount == this.state.images.size,
                                selectedTags: this.state.searchTags,
                                onSelectAll: this.doSelectAll.bind(this),
                                onShare: this.doShare.bind(this),
@@ -318,6 +322,8 @@ class PhotoApp extends react.Component {
                               E(Gallery, {match, location, history, images: this.state.images,
                                           hasMore: this.state.hasMore,
                                           loadMore: this.updateImages.bind(this),
+                                          imageCount: this.state.imageCount,
+                                          loadedCount: this.state.images ? this.state.images.size : null,
                                           selectedTags: this.state.searchTags,
                                           selectTag: this.selectTag.bind(this),
                                           onStartSlideshow: this.onStartSlideshow.bind(this),

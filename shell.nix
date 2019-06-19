@@ -48,7 +48,7 @@ in pkgs.stdenv.mkDerivation {
   name = "intrustd-cpp";
 
   buildInputs = with pkgs; [
-    pkgconfig cmake gdb openssl_1_1_0.dev
+    pkgconfig cmake gdb openssl_1_1.dev
     uriparser nodejs-8_x
     uthash zlib check
 
