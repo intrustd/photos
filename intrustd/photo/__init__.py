@@ -9,6 +9,7 @@ import sys
 import os
 import re
 import math
+import magic
 
 from sqlalchemy import or_, and_, func
 from sqlalchemy.orm import aliased, joinedload
@@ -23,6 +24,7 @@ from intrustd.permissions import Placeholder, mkperm
 from intrustd.tasks import schedule_command, get_scheduled_command_status
 
 M3U8_MIMETYPE = 'application/x-mpegURL'
+JPEG_PREVIEW_MIMETYPE = 'image/jpeg'
 MPEGTS_MIMETYPE = 'video/MP2T'
 
 class VideoEncoding(object):
@@ -202,6 +204,7 @@ def video_preview(image_hash=None):
         if os.path.exists(preview):
             rsp = send_file(preview)
             rsp.headers['Cache-control'] = 'private, max-age=43200'
+            rsp.headers['Content-type'] = JPEG_PREVIEW_MIMETYPE
             return rsp
 
         else:
@@ -223,29 +226,39 @@ def image(image_hash=None):
 
             size = round_size(size)
 
+        fmt = request.args.get('format', 'normal')
+
         with session_scope() as session:
             existing = session.query(Photo).get(image_hash)
             if existing is None:
                 return 'Not found', 404
 
             if existing.video:
-                hls_dir = get_photo_path("{}.hls".format(image_hash), absolute=True)
-                vfs = [ vf for vf in existing.video_formats if vf.is_complete ]
-                if len(vfs) == 0:
-                    return 'No format available', 404
+                if fmt == 'raw':
+                    path = get_photo_path("{}.tmp".format(image_hash), absolute=True)
+                    r = send_file(path)
+                    r.headers['Cache-control'] = 'private, max-age=43200'
+                    r.headers['ETag'] = image_hash
+                    r.headers['Content-type'] = existing.mime_type
+                    return r
+                else:
+                    hls_dir = get_photo_path("{}.hls".format(image_hash), absolute=True)
+                    vfs = [ vf for vf in existing.video_formats if vf.is_complete ]
+                    if len(vfs) == 0:
+                        return 'No format available', 404
 
-                hls = '''#EXTM3U
+                    hls = '''#EXTM3U
 #EXT-X-VERSION:3
 '''
-                for vf in vfs:
-                    hls += '#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION={}x{}\n'.format(vf.width, vf.height)
-                    hls += 'intrustd+app://photos.intrustd.com/image/{}/stream/{}p\n'.format(image_hash, vf.height)
+                    for vf in vfs:
+                        hls += '#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION={}x{}\n'.format(vf.width, vf.height)
+                        hls += 'intrustd+app://photos.intrustd.com/image/{}/stream/{}p\n'.format(image_hash, vf.height)
 
-                r = Response(hls)
-                r.headers['Content-type'] = M3U8_MIMETYPE
-                r.headers['ETag'] = image_hash
-                r.headers['Cache-control'] = 'private, max-age=43200'
-                return r
+                    r = Response(hls)
+                    r.headers['Content-type'] = M3U8_MIMETYPE
+                    r.headers['ETag'] = image_hash
+                    r.headers['Cache-control'] = 'private, max-age=43200'
+                    return r
             else:
 
                 orig_path = get_photo_path(image_hash, absolute=True)
@@ -259,6 +272,7 @@ def image(image_hash=None):
                     rsp = send_file(photo_path)
                     rsp.headers['Cache-control'] = 'private, max-age=43200'
                     rsp.headers['ETag'] = image_hash if size is None else "{}@{}".format(image_hash, size)
+                    rsp.headers['Content-type'] = existing.mime_type
                     return rsp
 
                 else:
@@ -272,6 +286,16 @@ def _update_photo_dims(photo):
             photo.width = width
             photo.height = height
 
+def _update_photo_type(photo):
+    if photo.video:
+        path = get_photo_path("{}.tmp".format(photo.id))
+    else:
+        path = get_photo_path(photo.id)
+
+    if os.path.exists(path):
+        mime_type = magic.from_file(path, mime=True)
+        photo.mime_type = mime_type
+
 def _handle_video(uploaded):
     video_id = sha256_sum_file(uploaded.stream)
 
@@ -282,6 +306,8 @@ def _handle_video(uploaded):
 
         video_path = '{}.tmp'.format(get_photo_dir(video_id))
         uploaded.save(video_path)
+
+        video_type = magic.from_file(video_path, mime=True)
 
         try:
             try:
@@ -294,7 +320,6 @@ def _handle_video(uploaded):
             vstreams = [ stream for stream in info['streams'] if stream['codec_type'] == 'video' ]
             astreams = [ stream for stream in info['streams'] if stream['codec_type'] == 'audio' ]
 
-            print("Got info", info)
             if len(vstreams) == 0 or len(astreams) == 0:
                 return jsonify({'error': 'no streams'}), 400
 
@@ -306,6 +331,7 @@ def _handle_video(uploaded):
             video = Photo(id=video_id,
                           description="",
                           width=width, height=height,
+                          mime_type=video_type,
                           video=True)
             session.add(video)
 
@@ -326,7 +352,7 @@ def _handle_video(uploaded):
                 fmts.append(fmt)
 
             fmts.sort(key=lambda v:v.width)
-            print("Got vstreams", vstreams, fmts)
+
             fmt = fmts[0]
 
             task = schedule_command(fmt.command)
@@ -358,6 +384,7 @@ def _handle_photo(uploaded):
             photo = Photo(id=photo_id,
                           description="")
             _update_photo_dims(photo)
+            _update_photo_type(photo)
             session.add_all([photo])
             session.commit()
 
@@ -448,6 +475,9 @@ def upload(cur_perms=None):
                 if p.width is None or p.height is None:
                     _update_photo_dims(p)
 
+                if p.mime_type is None:
+                    _update_photo_type(p)
+
                 if ViewPerm(photo_id=p.id) in cur_perms or perms.debug:
                     ims.append(p.to_json())
 
@@ -458,12 +488,10 @@ def upload(cur_perms=None):
             return rsp
 
     elif request.method == 'POST':
-        print("Got POST request")
         if 'photo' not in request.files:
             return jsonify({'error': 'expected an upload named photo'}), 400
 
         uploaded = request.files['photo']
-        print("Content type", uploaded.content_type)
         if uploaded.content_type not in UPLOAD_HANDLERS:
             return jsonify({'error': '{} is not an accepted content type'}), 415
 

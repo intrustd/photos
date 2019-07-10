@@ -17,6 +17,39 @@ import { HashRouter as Router,
 
 import './photos.svg';
 
+import streamsaver from 'streamsaver';
+
+if ( HOSTED_MITM )
+    streamsaver.mitm = HOSTED_MITM;
+
+const CONTENT_TYPE_TO_EXTENSION = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/pjpeg': 'jpg',
+    'image/bmp': 'bmp',
+    'image/tiff': 'tiff',
+    'image/webp': 'webp',
+    'video/mpeg': 'mp4',
+    'video/mp4': 'mp4',
+    'video/x-matroska': 'mkv',
+    'video/ogg': 'ogv',
+    'video/3gpp': '3gp',
+    'video/3gpp2': '3g2'
+}
+
+export class CouldNotDownloadImageError {
+    constructor(code) {
+        this.code = code
+    }
+}
+
+export class UnknownContentTypeError {
+    constructor(ty) {
+        this.contentType = ty
+        console.error("UnknownContentType: " + ty)
+    }
+}
+
 class PhotoUpload {
     constructor(key, formData) {
         this.key = key
@@ -300,6 +333,37 @@ class PhotoApp extends react.Component {
         }
     }
 
+    downloadSome(which) {
+        var streamName, streamPromise
+        if ( which.length == 0 ) return;
+        else if ( which.length == 1 ) {
+            var imageId = which[0];
+            streamName = `${imageId}.jpg`;
+            streamPromise = fetch(`${INTRUSTD_URL}/image/${imageId}?format=raw`,
+                                  { method: 'GET' })
+                .then((r) => {
+                    if ( r.status == 200 ) {
+                        var contentType = r.headers.get('content-type')
+                        console.log("Got content type", contentType, r.headers)
+                        var extension = CONTENT_TYPE_TO_EXTENSION[contentType]
+                        if ( extension === undefined )
+                            throw new UnknownContentTypeError(contentType)
+
+                        return { body: r.body, extension }
+                    } else {
+                        throw new CouldNotDownloadImageError(r.status)
+                    }
+                })
+        }
+
+        return streamPromise.then(({body, extension}) => {
+            var fileStream = streamsaver.createWriteStream(`${streamName}.${extension}`, {
+                size: 22
+            })
+            return body.pipeTo(fileStream)
+        })
+    }
+
     render() {
         const E = react.createElement;
 
@@ -330,6 +394,7 @@ class PhotoApp extends react.Component {
                                           onEndSlideshow: this.onEndSlideshow.bind(this),
                                           onImageDescriptionChanged: this.onImageDescriptionChanged.bind(this),
                                           onSelectionChanged: (sel) => this.setState({selectedCount: sel.size}),
+                                          onDownload: this.downloadSome.bind(this),
                                           key: 'gallery', ref: this.galleryRef }) }),
 
                    E('ul', {className: `ph-uploads-indicator ${this.state.uploads.length > 0 ? 'ph-uploads-indicator--active' : ''}`},

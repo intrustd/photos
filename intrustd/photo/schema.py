@@ -24,6 +24,8 @@ class Photo(Base):
 
     video = Column(Boolean, default=False)
 
+    mime_type = Column(String)
+
     tags = relationship('PhotoTag', cascade='delete,delete-orphan')
     video_formats = relationship('VideoFormat', cascade='delete,delete-orphan')
 
@@ -98,7 +100,7 @@ engine = create_engine("sqlite:///" + get_photo_dir(".photos.db", absolute=True)
 Session = sessionmaker(bind=engine)
 
 def do_migrate():
-    latest_version = 4
+    latest_version = 5
 
     session = Session()
     connection = engine.connect()
@@ -148,6 +150,11 @@ def do_migrate():
         if version <= 3:
             connection.execute('''
                CREATE INDEX photo_modified ON photo (modified_on)
+            ''')
+
+        if version <= 4:
+            connection.execute('''
+               ALTER TABLE photo ADD COLUMN mime_type TEXT
             ''')
 
         if version < latest_version:

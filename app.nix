@@ -35,7 +35,7 @@ let grpc-io-tools = ps: ps.buildPythonPackage rec {
 
       doCheck = false;
 
-      propagatedBuildInputs = with python.pkgs; [ flask sqlalchemy requests pillow py-intrustd ];
+      propagatedBuildInputs = with python.pkgs; [ flask sqlalchemy requests pillow py-intrustd python_magic ];
 
       meta = {
         homepage = "https://photos.intrustd.com";
@@ -46,7 +46,7 @@ let grpc-io-tools = ps: ps.buildPythonPackage rec {
 in {
 
   app.version.major = 0;
-  app.version.minor = 3;
+  app.version.minor = 4;
 
   app.meta = {
      slug = "photos";

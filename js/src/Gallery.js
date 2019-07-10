@@ -456,7 +456,7 @@ class SlideshowImpl extends React.Component {
                                 'uk-tooltip': 'title: Download' },
                        E('a', { href: '#',
                                 onClick: (e) => { e.preventDefault();
-//                                                  this.
+                                                  this.props.onDownload([curImage.id]);
                                                 } },
                          E('i', { className: 'fa fa-fw fa-3x fa-download' }))),
                      E('div', { className: 'uk-navbar-item',
@@ -560,6 +560,7 @@ export default class Gallery extends React.Component {
                                   makeImageRoute: (id) => `${match.url}slideshow/${id}`,
                                   canLoadMore: this.props.loadedCount < this.props.imageCount,
                                   loadMore: this.props.loadMore,
+                                  onDownload: this.props.onDownload,
                                   parentRoute: match.url })
         else
             return E('span', {className: 'fa fa-spin fa-large fa-circle-o-notch'})
