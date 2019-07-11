@@ -65,6 +65,7 @@ in pkgs.stdenv.mkDerivation {
     (python3.withPackages (ps: [
        ps.flask ps.sqlalchemy ps.pyopenssl ps.pyudev ps.celery ps.redis
        ps.kombu ps.pytest ps.requests ps.pillow intrustd-py ps.python_magic
+       ps.zipstream
      ]))
     ffmpeg
   ];

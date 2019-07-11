@@ -10,6 +10,7 @@ import os
 import re
 import math
 import magic
+import zipstream
 
 from sqlalchemy import or_, and_, func
 from sqlalchemy.orm import aliased, joinedload
@@ -26,6 +27,7 @@ from intrustd.tasks import schedule_command, get_scheduled_command_status
 M3U8_MIMETYPE = 'application/x-mpegURL'
 JPEG_PREVIEW_MIMETYPE = 'image/jpeg'
 MPEGTS_MIMETYPE = 'video/MP2T'
+ZIP_MIMETYPE = 'application/zip'
 
 class VideoEncoding(object):
     def __init__(self, name, width, height, bitrate=None,
@@ -210,6 +212,45 @@ def video_preview(image_hash=None):
         else:
             abort(404)
 
+def read_file_iter(fp):
+    chunk_size = 16384
+    with open(fp, 'rb') as f:
+        while True:
+            chunk = f.read(chunk_size)
+            if len(chunk) == 0:
+                return
+            else:
+                yield chunk
+
+@app.route('/archive', methods=['POST'])
+def archive():
+    which = request.json
+
+    if not isinstance(which, list) or \
+       any(not isinstance(x, str) for x in which):
+        abort(400)
+
+    with session_scope() as session:
+        z = zipstream.ZipFile()
+
+        def do_request(cur_perms=None):
+            return Response(z, mimetype=ZIP_MIMETYPE)
+
+        for x in which:
+            photo = session.query(Photo).get(x)
+            if photo is None:
+                abort(404)
+
+            _ensure_photo_attrs(photo)
+            filename = photo.id
+            if photo.mime_type in CONTENT_TYPE_TO_EXTENSION:
+                filename += "." + CONTENT_TYPE_TO_EXTENSION[photo.mime_type]
+            z.write_iter(filename, read_file_iter(get_raw_photo_path(photo)))
+
+            do_request = perms.require(ViewPerm(photo_id=x))(do_request)
+
+        return do_request()
+
 @app.route('/image/<image_hash>')
 @perms.require(mkperm(ViewPerm, photo_id=Placeholder('image_hash')))
 def image(image_hash=None):
@@ -240,6 +281,8 @@ def image(image_hash=None):
                     r.headers['Cache-control'] = 'private, max-age=43200'
                     r.headers['ETag'] = image_hash
                     r.headers['Content-type'] = existing.mime_type
+                    if existing.mime_type in CONTENT_TYPE_TO_EXTENSION:
+                        r.headers['X-Extension'] = CONTENT_TYPE_TO_EXTENSION[existing.mime_type]
                     return r
                 else:
                     hls_dir = get_photo_path("{}.hls".format(image_hash), absolute=True)
@@ -273,10 +316,25 @@ def image(image_hash=None):
                     rsp.headers['Cache-control'] = 'private, max-age=43200'
                     rsp.headers['ETag'] = image_hash if size is None else "{}@{}".format(image_hash, size)
                     rsp.headers['Content-type'] = existing.mime_type
+                    if existing.mime_type in CONTENT_TYPE_TO_EXTENSION:
+                        rsp.headers['X-Extension'] = CONTENT_TYPE_TO_EXTENSION[existing.mime_type]
                     return rsp
 
                 else:
                     return abort(404)
+
+def get_raw_photo_path(photo):
+    if photo.video:
+        return get_photo_path("{}.tmp".format(photo.id))
+    else:
+        return get_photo_path(photo.id)
+
+def _ensure_photo_attrs(p):
+    if p.width is None or p.height is None:
+        _update_photo_dims(p)
+
+    if p.mime_type is None:
+        _update_photo_type(p)
 
 def _update_photo_dims(photo):
     path = get_photo_path(photo.id)
@@ -287,11 +345,7 @@ def _update_photo_dims(photo):
             photo.height = height
 
 def _update_photo_type(photo):
-    if photo.video:
-        path = get_photo_path("{}.tmp".format(photo.id))
-    else:
-        path = get_photo_path(photo.id)
-
+    path = get_raw_photo_path(photo)
     if os.path.exists(path):
         mime_type = magic.from_file(path, mime=True)
         photo.mime_type = mime_type
@@ -407,6 +461,21 @@ UPLOAD_HANDLERS = {
     'video/3gpp2': _handle_video
 }
 
+CONTENT_TYPE_TO_EXTENSION = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/pjpeg': 'jpg',
+    'image/bmp': 'bmp',
+    'image/tiff': 'tiff',
+    'image/webp': 'webp',
+    'video/mpeg': 'mp4',
+    'video/mp4': 'mp4',
+    'video/x-matroska': 'mkv',
+    'video/ogg': 'ogv',
+    'video/3gpp': '3gp',
+    'video/3gpp2': '3g2'
+}
+
 @app.route('/image', methods=['GET', 'POST'])
 @perms.require({ 'GET': GalleryPerm,
                  'POST': UploadPerm },
@@ -472,11 +541,7 @@ def upload(cur_perms=None):
 
             ims = []
             for p in photos:
-                if p.width is None or p.height is None:
-                    _update_photo_dims(p)
-
-                if p.mime_type is None:
-                    _update_photo_type(p)
+                _ensure_photo_attrs(p)
 
                 if ViewPerm(photo_id=p.id) in cur_perms or perms.debug:
                     ims.append(p.to_json())

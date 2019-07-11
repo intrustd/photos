@@ -137,14 +137,18 @@ export default class Navbar extends React.Component {
     }
 
     render() {
-        var status = []
+        var status = [], downloadLink = []
 
         if ( typeof this.props.imgCount == 'number' )
             status.push(`${this.props.imgCount} images`)
 
         if ( typeof this.props.selectedCount == 'number' &&
-             this.props.selectedCount > 0 )
+             this.props.selectedCount > 0 ) {
             status.push(`${this.props.selectedCount} selected`)
+            downloadLink = [ E('br'),
+                             E('a', { href: '#', onClick: (e) => { e.preventDefault(); this.props.downloadSelected() }},
+                              'Download all') ]
+        }
 
         var shareLinkInput
 
@@ -183,7 +187,8 @@ export default class Navbar extends React.Component {
                  E('div', {className: 'uk-navbar-right'},
 
                    E('div', { className: 'uk-navbar-item ph-nav-status' },
-                     status.join(", ")),
+                     status.join(", "),
+                     downloadLink),
 
                    E('div', { className: 'uk-navbar-item ph-nav-icon' },
                      E('a', { href: '#',

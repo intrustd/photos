@@ -22,21 +22,6 @@ import streamsaver from 'streamsaver';
 if ( HOSTED_MITM )
     streamsaver.mitm = HOSTED_MITM;
 
-const CONTENT_TYPE_TO_EXTENSION = {
-    'image/jpeg': 'jpg',
-    'image/png': 'png',
-    'image/pjpeg': 'jpg',
-    'image/bmp': 'bmp',
-    'image/tiff': 'tiff',
-    'image/webp': 'webp',
-    'video/mpeg': 'mp4',
-    'video/mp4': 'mp4',
-    'video/x-matroska': 'mkv',
-    'video/ogg': 'ogv',
-    'video/3gpp': '3gp',
-    'video/3gpp2': '3g2'
-}
-
 export class CouldNotDownloadImageError {
     constructor(code) {
         this.code = code
@@ -343,13 +328,25 @@ class PhotoApp extends react.Component {
                                   { method: 'GET' })
                 .then((r) => {
                     if ( r.status == 200 ) {
-                        var contentType = r.headers.get('content-type')
-                        console.log("Got content type", contentType, r.headers)
-                        var extension = CONTENT_TYPE_TO_EXTENSION[contentType]
+                        var extension = r.headers.get('x-extension')
                         if ( extension === undefined )
                             throw new UnknownContentTypeError(contentType)
 
                         return { body: r.body, extension }
+                    } else {
+                        throw new CouldNotDownloadImageError(r.status)
+                    }
+                })
+        } else {
+            streamName = 'photos';
+            console.log("Downloading", which)
+            streamPromise = fetch(`${INTRUSTD_URL}/archive`,
+                                  { method: 'POST',
+                                    body: JSON.stringify(which),
+                                    headers: { 'Content-type': 'application/json' }})
+                .then((r) => {
+                    if ( r.status == 200 ) {
+                        return { body: r.body, extension: 'zip' }
                     } else {
                         throw new CouldNotDownloadImageError(r.status)
                     }
@@ -379,6 +376,7 @@ class PhotoApp extends react.Component {
                                selectedTags: this.state.searchTags,
                                onSelectAll: this.doSelectAll.bind(this),
                                onShare: this.doShare.bind(this),
+                               downloadSelected: () => { this.downloadSome(this.state.images.toArray().map((p) => p.id)) },
                                shareLink: this.state.shareLink }),
 
                    E(Route, { path: '/',

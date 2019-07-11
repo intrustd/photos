@@ -31,11 +31,13 @@ let grpc-io-tools = ps: ps.buildPythonPackage rec {
       pname = "intrustd-photo";
       version = "0.1.0";
 
-      src = ./.; # ./dist/intrustd-photos-0.1.0.tar.gz; # ./.;
+      src = ./dist/intrustd-photos-0.1.0.tar.gz; # ./.;
 
       doCheck = false;
 
-      propagatedBuildInputs = with python.pkgs; [ flask sqlalchemy requests pillow py-intrustd python_magic ];
+      propagatedBuildInputs = with python.pkgs;
+        [ flask sqlalchemy requests pillow py-intrustd python_magic
+          zipstream ];
 
       meta = {
         homepage = "https://photos.intrustd.com";

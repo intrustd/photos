@@ -241,16 +241,13 @@ class ImageTile extends React.Component {
 
         if ( this.props.photo.type == 'video' ) {
             var progress
+            loadingClass = 'ph-gallery-image-card--loaded';
 
             if ( this.props.photo.progress ) {
                 progress = [ E(LoadingIndicator),
                              E('progress', { className: 'ph-gallery-conv-progress',
                                              max: this.props.photo.progress.total,
                                              value: this.props.photo.progress.complete }) ]
-            }
-
-            if ( !this.props.selected ) {
-                loadingClass = 'ph-gallery-image-card--loaded'
             }
 
             onMouseEnter = this.startPreview.bind(this)
