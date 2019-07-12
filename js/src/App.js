@@ -376,7 +376,12 @@ class PhotoApp extends react.Component {
                                selectedTags: this.state.searchTags,
                                onSelectAll: this.doSelectAll.bind(this),
                                onShare: this.doShare.bind(this),
-                               downloadSelected: () => { this.downloadSome(this.state.images.toArray().map((p) => p.id)) },
+                               downloadSelected: () => {
+                                   var gallery = this.galleryRef.current
+                                   if ( gallery ) {
+                                       this.downloadSome(gallery.getSelection().map((p) => p.id))
+                                   }
+                               },
                                shareLink: this.state.shareLink }),
 
                    E(Route, { path: '/',

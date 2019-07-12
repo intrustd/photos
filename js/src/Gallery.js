@@ -550,6 +550,10 @@ export default class Gallery extends React.Component {
             this.wasVisible = false
     }
 
+    getSelectedList() {
+        return this.state.selected.toArray()
+    }
+
     renderSlideshow(thisProps) {
         var { images, match } = this.props
         if ( images )
