@@ -10,9 +10,12 @@ const BUILD_DIR = path.resolve(__dirname, 'build')
 const NODE_MODULES_DIR = path.resolve(__dirname, 'node_modules')
 
 module.exports = {
-    entry: './src/Photo.js',
+    entry: {
+        index: './src/Photo.js',
+        sw: './src/sw.js'
+    },
     output: {
-        filename: './index.js'
+        filename: './[name].js'
     },
     module: {
         rules: [
@@ -50,7 +53,9 @@ module.exports = {
             {test: /webfont\.svg(\?v=\d+.\d+.\d+)?$/,
              use: [{loader: 'file-loader', options: {name: '[name].[ext]', outputPath: 'fonts'}}]},
             {test: /\.(png|svg)(\?v=\d+.\d+.\d+)?$/,
-             use: [{loader: 'file-loader', options: {name: '[name].[ext]', outputPath: 'images'}}]}
+             use: [{loader: 'file-loader', options: {name: '[name].[ext]', outputPath: 'images'}}]},
+            {test: /\.(html)$/,
+             use: [{loader: 'file-loader', options: {name: '[name].[ext]', outputPath: './'}}]}
         ]
     },
 
