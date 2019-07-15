@@ -458,7 +458,8 @@ UPLOAD_HANDLERS = {
     'video/ogg': _handle_video,
     'video/webm': _handle_video,
     'video/3gpp': _handle_video,
-    'video/3gpp2': _handle_video
+    'video/3gpp2': _handle_video,
+    'video/quicktime': _handle_video
 }
 
 CONTENT_TYPE_TO_EXTENSION = {
