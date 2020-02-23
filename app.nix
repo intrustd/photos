@@ -48,7 +48,7 @@ let grpc-io-tools = ps: ps.buildPythonPackage rec {
 in {
 
   app.version.major = 0;
-  app.version.minor = 4;
+  app.version.minor = 5;
 
   app.meta = {
      slug = "photos";

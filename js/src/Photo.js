@@ -15,7 +15,7 @@ install({permissions: [ "intrustd+perm://photos.intrustd.com/comment",
                         "intrustd+perm://photos.intrustd.com/albums/create/transfer",
                         "intrustd+perm://admin.intrustd.com/guest/transfer" ],
          appName: 'photos.intrustd.com',
-         requiredVersion: '0.4.0',
+         requiredVersion: '0.5.0',
          oninstall: () => {
              const App = require('./App.js')
              App.start()
