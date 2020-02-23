@@ -31,7 +31,7 @@ let grpc-io-tools = ps: ps.buildPythonPackage rec {
       pname = "intrustd-photo";
       version = "0.1.0";
 
-      src = ./.; #dist/intrustd-photos-0.1.0.tar.gz; # ./.;
+      src = ./.; # dist/intrustd-photos-0.1.0.tar.gz; # ./.;
 
       doCheck = false;
 
@@ -89,6 +89,17 @@ in {
 
     { name = "gallery";
       description = "List all photos"; }
+
+    { name = "albums/create";
+      description = "Create Albums"; }
+
+    { name = "albums/view";
+      description = "View All Albums";
+      dynamic = true; }
+
+    { regex = "albums/view/(?P<album_Id>[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12})";
+      description = "View a particular album";
+      dynamic = true; }
 
     { regex = "view/(?P<photo_id>[A-Fa-f0-9]{64})";
       description = "View some photos";

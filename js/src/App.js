@@ -1,11 +1,10 @@
-import UIKit from 'uikit';
-import 'uikit/src/less/uikit.theme.less';
+import 'bootstrap/scss/bootstrap.scss';
 
-import { install, mintToken } from 'intrustd';
+import { install, mintToken, isPermalink } from 'intrustd';
 
-import Albums from './Albums';
 import Gallery from './Gallery';
 import Navbar from './Navbar';
+import { AddToAlbumModal } from './Albums';
 import { INTRUSTD_URL, makeAbsoluteUrl } from './PhotoUrl.js';
 
 import { Map, Set, OrderedSet, List } from 'immutable';
@@ -15,9 +14,13 @@ import { HashRouter as Router,
          Route, Switch,
          Link } from 'react-router-dom';
 
+import Progress from 'react-bootstrap/ProgressBar';
+
 import './photos.svg';
 
 import streamsaver from 'streamsaver';
+
+const MAX_UPLOAD_CONCURRENCY = 10;
 
 if ( HOSTED_MITM )
     streamsaver.mitm = HOSTED_MITM;
@@ -58,7 +61,6 @@ class PhotoUpload {
 
             var photo = null
             try {
-//                console.log("Got response", this.req.responseText)
                 photo = JSON.parse(this.req.responseText)
             } catch (e) {
                 photo = null
@@ -99,8 +101,6 @@ class UploadIndicator extends react.Component {
     }
 
     onProgress(e) {
-//        console.log('onProgress', e)
-
         if ( e.error ) {
             this.setState({error: true, errorString: e.what })
         } else {
@@ -125,13 +125,17 @@ class UploadIndicator extends react.Component {
 
         var progProps = { className: 'uk-progress' }
         if ( this.state.total !== null ) {
-            progProps.value = '' + this.state.complete;
-            progProps.max = '' + this.state.total;
+            progProps.now = this.state.complete;
+            progProps.max = this.state.total;
+        } else {
+            progProps.now = 1;
+            progProps.max = 1;
+            progProps.animated = true;
         }
 
         return  E('li', {className: 'ph-upload'},
                   this.props.upload.fileName,
-                  E('progress', progProps))
+                  E(Progress, progProps))
     }
 }
 
@@ -155,8 +159,6 @@ class PhotoApp extends react.Component {
         var search = this.state.searchTags.toArray()
             .map((tag) => `tag[]=${encodeURIComponent(tag)}`)
         var append = false
-
-        console.log("Update images")
 
         if ( this.state.search !== null )
             search.push(`q=${encodeURIComponent(this.state.search)}`)
@@ -236,8 +238,9 @@ class PhotoApp extends react.Component {
 
     onImageDescriptionChanged(imageId, newDesc, tags) {
         var image = this.state.images.filter((img) => (img.id == imageId))
-        if ( image.length == 0 ) return
-        image = image[0]
+
+        if ( image.size == 0 ) return
+        image = image.first()
 
         var oldDesc = image.description
 
@@ -268,14 +271,6 @@ class PhotoApp extends react.Component {
         this.setState({ slideshow: false })
     }
 
-    shareAll() {
-        return mintToken([ 'intrustd+perm://photos.intrustd.com/gallery',
-                           'intrustd+perm://photos.intrustd.com/view',
-                           'intrustd+perm://admin.intrustd.com/guest' ],
-                         { format: 'query' })
-            .then((tok) => makeAbsoluteUrl('#/', tok))
-    }
-
     selectTag(tag, include) {
         var oldTags = this.state.searchTags, searchTags
 
@@ -291,31 +286,28 @@ class PhotoApp extends react.Component {
         }
     }
 
-    doShare(what) {
-        switch ( what ) {
-        case 'all':
-            this.shareAll().then((url) => this.setState({shareLink: url}))
-            break
-        case 'selected':
-            if ( this.state.selectedCount > 0 &&
-                 this.galleryRef.current ) {
-                this.galleryRef.current.shareSelected()
-                    .then((url) => this.setState({ shareLink: url }))
-            }
-            break;
-        default:
-            console.log('doShare: do not know what to share: ', what)
-        }
+    doShare(what, albumId) {
+        this.galleryRef.current.share(what, albumId)
     }
 
     doSelectAll() {
         if ( this.galleryRef.current !== undefined && this.state.images !== undefined ) {
             if ( this.state.selectedCount == this.state.images.size )
-                this.galleryRef.current.updateSelection(Set())
+                this.doDeselectAll()
             else {
                 this.galleryRef.current.selectAll()
             }
         }
+    }
+
+    doDeselectAll() {
+        this.galleryRef.current.updateSelection(Set())
+    }
+
+    addToAlbums() {
+        var selected = this.galleryRef.current.getSelectedList()
+
+        this.setState({addingToAlbum: selected})
     }
 
     downloadSome(which) {
@@ -339,7 +331,6 @@ class PhotoApp extends react.Component {
                 })
         } else {
             streamName = 'photos';
-            console.log("Downloading", which)
             streamPromise = fetch(`${INTRUSTD_URL}/archive`,
                                   { method: 'POST',
                                     body: JSON.stringify(which),
@@ -364,9 +355,30 @@ class PhotoApp extends react.Component {
     render() {
         const E = react.createElement;
 
+        var uploadsRemainingIndicator, ongoingUploads = [], addingToAlbum
+
+        if ( (this.state.uploads.length - MAX_UPLOAD_CONCURRENCY) > 0 )
+            uploadsRemainingIndicator = [
+                E('hr'),
+                E('div', { className: 'uploads-remaining' },
+                  `${(this.state.uploads.length - MAX_UPLOAD_CONCURRENCY)} left to upload...`)
+            ]
+
+        if ( this.state.uploads.length <= MAX_UPLOAD_CONCURRENCY )
+            ongoingUploads = this.state.uploads
+        else
+            ongoingUploads = this.state.uploads.slice(0, MAX_UPLOAD_CONCURRENCY - 1)
+
+        if ( this.state.addingToAlbum ) {
+            addingToAlbum = E(AddToAlbumModal, { images: this.state.addingToAlbum,
+                                                 onDone: () => { this.setState({addingToAlbum: null}) } })
+        }
+
         return E(Router, {},
                  E('div', null,
                    E(Navbar, { uploadPhoto: (fd) => this.uploadPhoto(fd),
+                               perms: this.props.perms,
+                               visible: !this.state.slideshow,
                                ref: this.navbarRef,
                                searchTags: this.state.searchTags,
                                selectTag: this.selectTag.bind(this),
@@ -375,6 +387,8 @@ class PhotoApp extends react.Component {
                                allSelected: this.state.images !== undefined && this.state.selectedCount == this.state.images.size,
                                selectedTags: this.state.searchTags,
                                onSelectAll: this.doSelectAll.bind(this),
+                               onDeselectAll: this.doDeselectAll.bind(this),
+                               onAddAlbum: this.addToAlbums.bind(this),
                                onShare: this.doShare.bind(this),
                                downloadSelected: () => {
                                    var gallery = this.galleryRef.current
@@ -387,31 +401,78 @@ class PhotoApp extends react.Component {
                    E(Route, { path: '/',
                               render: ({match, location, history}) =>
                               E(Gallery, {match, location, history, images: this.state.images,
+                                          perms: this.props.perms,
                                           hasMore: this.state.hasMore,
                                           loadMore: this.updateImages.bind(this),
                                           imageCount: this.state.imageCount,
                                           loadedCount: this.state.images ? this.state.images.size : null,
                                           selectedTags: this.state.searchTags,
                                           selectTag: this.selectTag.bind(this),
-                                          onStartSlideshow: this.onStartSlideshow.bind(this),
+                                          onStartSliedeshow: this.onStartSlideshow.bind(this),
                                           onEndSlideshow: this.onEndSlideshow.bind(this),
                                           onImageDescriptionChanged: this.onImageDescriptionChanged.bind(this),
                                           onSelectionChanged: (sel) => this.setState({selectedCount: sel.size}),
                                           onDownload: this.downloadSome.bind(this),
                                           key: 'gallery', ref: this.galleryRef }) }),
 
+                   addingToAlbum,
+
                    E('ul', {className: `ph-uploads-indicator ${this.state.uploads.length > 0 ? 'ph-uploads-indicator--active' : ''}`},
                      'Uploading',
-                     this.state.uploads.map((ul) => {
+                     E('hr', {}),
+                     ongoingUploads.map((ul) => {
                          return E(UploadIndicator, {upload: ul, key: ul.key,
                                                     onComplete: (photo) => { this.uploadCompletes(ul.key, photo) }})
-                     }))
+                     }),
+                     uploadsRemainingIndicator
+                    )
 
 
                   ))
     }
 }
 
-var container = document.createElement('div');
-document.body.appendChild(container);
-ReactDom.render(react.createElement(PhotoApp), container);
+var globalPerms = { gallery: false,
+                    comment: false,
+                    albums: false,
+                    createAlbums: false,
+                    upload: false }
+
+export function start() {
+    var setupPromise = Promise.resolve()
+    if ( isPermalink && location.hash == '' ) {
+        // Query what's available
+        setupPromise = fetch(`${INTRUSTD_URL}/albums`,
+                             { method: 'GET' })
+            .then((r) => {
+                if ( r.ok ) {
+                    return r.json().then((albums) => {
+                        if ( albums.length == 1 )
+                            location.hash = `/album/${albums[0].id}`;
+                        else if ( albums.length > 1 )
+                            location.hash = '/album';
+                        else
+                            return Promise.reject()
+                    })
+                }
+            }).catch((e) => {
+                return null;
+            })
+    }
+    setupPromise.then(doMount)
+
+    fetch(`${INTRUSTD_URL}/user/info`,
+          { cache: 'no-store' })
+        .then((r) => {
+            if ( r.ok )
+                return r.json().then((perms) => {
+                    globalPerms = Object.assign({}, globalPerms, perms)
+                })
+        }).then(doMount)
+}
+
+function doMount() {
+    var container = document.createElement('div');
+    document.body.appendChild(container);
+    ReactDom.render(react.createElement(PhotoApp, { perms: globalPerms }), container);
+}

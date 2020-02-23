@@ -1,22 +1,103 @@
-@keyframes ph-card-anim {
-    0% { transform: translateY(10px); opacity: 0 }
-    100% { transform: none; opacity: 1 }
+@import 'bootstrap/scss/bootstrap.scss';
+
+.album {
+    margin: 25px;
 }
 
-.ph-album-card {
-    animation: ph-card-anim;
-    animation-iteration-count: 1;
-    animation-duration: 1s;
-    animation-fill-mode: forwards;
-    opacity: 0;
-
-    min-width: 200px;
-    margin: 10px;
+.album--editing {
+    .album-title {
+        border-bottom: 2px solid #ccc;
+    }
 }
 
-@for $i from 1 to 20 {
-    .ph-album-card:nth-child(#{$i}) {
-        $delay: $i * 0.1;
-        animation-delay: #{$delay}s;
+.album.album--editing .ph-gallery-image-card,
+.album.album--editing .album-text {
+    cursor: grab;
+}
+
+.inserter {
+    display: flex;
+    align-items: center;
+    position: relative;
+    z-index: 10000;
+
+    .inserter-bar {
+        opacity: 0;
+        width: 4px;
+        height: 4px;
+        background-color: $primary;
+    }
+
+    background-color: black;
+
+    &.inserter--active {
+        position: static;
+        .inserter-bar { opacity: 1 }
+    }
+
+    transition: margin 0.2s;
+}
+
+.inserter--horizontal {
+    min-height: 30px;
+    height: 30px;
+    width: 100%;
+    margin-bottom: -30px;
+
+    &.inserter--active {
+        margin-bottom: 0;
+    }
+
+    flex-direction: column;
+
+    background-color: transparent;
+
+    .inserter-bar {
+        width: 100%;
+    }
+}
+
+.inserter--vertical {
+    height: 100%;
+    min-width: 30px;
+    width: 30px;
+    margin-right: -30px;
+
+    flex-direction: row;
+
+    background-color: transparent;
+
+    &.inserter--active {
+        margin-right: 0;
+    }
+
+    .inserter-bar {
+        height: 100%;
+    }
+}
+
+.ph-album-image-dragging {
+    transition: none !important;
+}
+
+.album-navbar {
+    z-index: $zindex-sticky + 1;
+}
+
+.album-text {
+    display: block;
+
+    border: none;
+
+    text-align: center;
+    margin: 20px 40px;
+
+    border-radius: 10px;
+
+    padding: 15px;
+
+    .album--editing &, &.album-text--editing, &:hover {
+        border: 1px solid #ccc;
+        box-shadow: 2px 2px 3px #eee;
     }
 }

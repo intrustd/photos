@@ -1,11 +1,14 @@
 from intrustd.permissions import Permissions
 
+from .schema import session_scope, AlbumItem
+
 perms = Permissions('intrustd+perm://photos.intrustd.com')
 
 CommentAllPerm = perms.permission('/comment')
 ViewAllPerm = perms.permission('/view')
 GalleryPerm = perms.permission('/gallery')
 UploadPerm = perms.permission('/upload')
+CreateAlbumsPerm = perms.permission('/albums/create')
 
 @perms.permission('/view/<photo_id ~"[a-fA-F0-9]{64}">')
 class ViewPerm(object):
@@ -15,6 +18,17 @@ class ViewPerm(object):
     def search(self, search):
         for _ in search.search(ViewAllPerm):
             search.satisfy()
+
+        for _ in search.search(ViewAlbumsPerm):
+            search.satisfy()
+
+        for perm in search.search(ViewAlbumPerm):
+            with session_scope() as session:
+                item = session.query(AlbumItem) \
+                              .filter(AlbumItem.album_id==perm.album_id,
+                                      AlbumItem.photo_id==self.photo_id).first()
+                if item is not None:
+                    search.satisfy()
 
 @perms.permission('/comment/<photo_id ~"[a-fA-F0-9]{64}">')
 class CommentPerm(object):
@@ -28,6 +42,24 @@ class CommentPerm(object):
     def validate(self):
         print("Need to check if ", self.photo_id, " exists")
         return False
+
+@perms.permission('/albums/view')
+class ViewAlbumsPerm(object):
+    def __init__(self):
+        pass
+
+    def search(self, search):
+        for _ in search.search(CreateAlbumsPerm):
+            search.satisfy()
+
+@perms.permission(r'/albums/view/<album_id ~"[0-9a-fA-F]{8}\\-[0-9a-fA-F]{4}\\-[0-9a-fA-F]{4}\\-[0-9a-fA-F]{4}\\-[0-9a-fA-F]{12}">')
+class ViewAlbumPerm(object):
+    def __init__(self, album_id=None):
+        self.album_id = album_id
+
+    def search(self, search):
+        for _ in search.search(ViewAlbumsPerm):
+            search.satisfy()
 
 def image_thumbnail_gallery(imgs):
     gallery = []
@@ -82,6 +114,30 @@ def basic_actions(search):
         action_string = ", ".join("*{}*".format(action) for action in actions)
 
         return [ { 'short': '{} on images'.format(action_string) } ], perms
+
+@perms.description
+def view_albums_permission(search):
+    perms = set()
+    can_create = False
+    for p in search.search(ViewAlbumsPerm):
+        perms.add(p)
+    for p in search.search(CreateAlbumsPerm):
+        can_create = True
+        perms.add(p)
+
+    if can_create:
+        return [ { 'short': '*Create* and *view* albums' } ], perms
+    else:
+        return [ { 'short': '*View* albums' } ], perms
+
+@perms.description
+def view_album_permission(search):
+    perms = set()
+
+    for p in search(ViewAlbumPerm):
+        return p
+
+    return [ { 'short': '*View* some albums' } ], perms
 
 @perms.description
 def view_comment_images_permission(search):

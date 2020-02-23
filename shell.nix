@@ -1,4 +1,4 @@
-{ pkgs ? (import <nixpkgs> {}) }:
+{ pkgs ? (import <nixpkgs> { config.android_sdk.accept_license = true; config.allowUnfree = true;}) }:
 
 let stdenv = pkgs.stdenv;
 
@@ -7,8 +7,8 @@ let stdenv = pkgs.stdenv;
       pkgs.fetchFromGitHub {
         owner = "intrustd";
         repo = "py-intrustd";
-        rev = "3ded67ad1d153f7d3e969fce2f26e5f737a2a1c8";
-        sha256 = "14dkz41n81vfppab2k4b8mc25ciqzwsr1wrw6slbsxi1znvdajsk";
+        rev = "0a1e7114fb44ce9736a8fe88eb21e345c746db7a";
+        sha256 = "04h5b508ndz23z70k2adh2qh2cddkqjx2n7i8vnqbyvjlgcxmck8";
       };
 
     intrustd-py = pkgs.callPackage intrustd-py-srcs { };
@@ -44,6 +44,8 @@ let stdenv = pkgs.stdenv;
 
 #   lksctp-tools-1-0-18 = pkgs.callPackage ./deploy/pkgs/lksctp-tools.nix { };
 
+  run-android = pkgs.callPackage ../mobile.nix { node = pkgs.nodejs-8_x; };
+
 in pkgs.stdenv.mkDerivation {
   name = "intrustd-cpp";
 
@@ -65,12 +67,23 @@ in pkgs.stdenv.mkDerivation {
     (python3.withPackages (ps: [
        ps.flask ps.sqlalchemy ps.pyopenssl ps.pyudev ps.celery ps.redis
        ps.kombu ps.pytest ps.requests ps.pillow intrustd-py ps.python_magic
-       ps.zipstream
+       ps.zipstream ps.pylint ps.selenium
      ]))
-    ffmpeg
+    ffmpeg chromedriver
+
+#    run-android
+#    nodePackages.react-native-cli jdk
+#    android.androidsdk android-studio
+
+#    gradle nodePackages.cordova nodePackages.ionic
   ];
 
   inherit intrustd-py;
+
+  GOOGLE_CHROME="${pkgs.google-chrome}/bin/google-chrome-stable";
+  ANDROID_JAVA_HOME="${pkgs.jdk.home}";
+#  ANDROID_SDK_ROOT = "${android.androidsdk}/libexec/android-sdk";
+#  ANDROID_HOME = "${android.androidsdk}/libexec/android-sdk";
 
 #  CMAKE_
 }

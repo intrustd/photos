@@ -1,5 +1,29 @@
 @import url('https://fonts.googleapis.com/css?family=Roboto');
 
+@import 'bootstrap/scss/bootstrap.scss';
+
+.navbar-brand img {
+    width: 48px;
+    height: 48px;
+}
+
+.navbar-brand {
+    display: flex;
+    flex-direction: column;
+}
+
+.download-navbar {
+    z-index: $zindex-sticky - 1 !important;
+}
+
+.nav-link, .nav-item {
+    align-self: center;
+
+//    &:hover {
+//        color: $primary !important;
+//    }
+}
+
 .ph-uploads-indicator {
     position: fixed;
     left: 0;
@@ -27,7 +51,76 @@
     animation-iteration-count: 1;
 }
 
+.ph-nav-icon {
+    margin: 6px;
+
+    .fa {
+        font-size: 20px;
+    }
+}
+
+.form-inline {
+    margin-bottom: 0;
+}
+
+.nav-link {
+    display: inline;
+}
+
 @keyframes upload-fade-up {
     0% { transform: translateY(10px); opacity: 0; }
     100% { transform: none; opacity: 1; }
+}
+
+.album-list .list-group-item {
+    cursor: pointer;
+
+    &:hover { background-color: $blue; color: white; }
+}
+
+.slide-left-enter {
+    transform: translateX(100%);
+}
+
+.slide-left-enter.slide-left-enter-active {
+    transform: translateX(0%);
+    transition: transform 200ms;
+}
+
+.slide-left-leave {
+    transform: translateX(-100%);
+}
+
+.slide-left-leave.slide-left-leave-active {
+    transform: translateX(0%);
+    transition: transform 200s;
+}
+
+.slide-up-enter {
+    display: block;
+    transform: translateY(100%);
+}
+
+.slide-up-enter.slide-up-enter-active {
+    transform: translateY(0%);
+    transition: transform 200ms;
+}
+
+.slide-up-leave {
+    display: block;
+    transform: translateY(0%);
+}
+
+.slide-up-leave.slide-up-leave-active {
+    transform: translateY(-100%);
+    transition: transform 200s;
+}
+
+.navbar-brand {
+    overflow: hidden;
+}
+
+.image-brand {
+    text-decoration: none;
+    color: inherit;
 }
