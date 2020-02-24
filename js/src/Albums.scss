@@ -101,3 +101,17 @@
         box-shadow: 2px 2px 3px #eee;
     }
 }
+
+.image-list {
+    display: flex;
+    flex-direction: row;
+    list-style: none;
+
+    padding: 0;
+    margin: 10px;
+
+    li.image-preview {
+        margin: 2px;
+        padding: 0;
+    }
+}

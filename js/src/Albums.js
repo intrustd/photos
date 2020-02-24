@@ -49,14 +49,14 @@ class AlbumToolbar extends React.Component {
                            bg: 'light', variant: 'light', fixed: 'top',
                            className: 'album-navbar' },
                  E(Navbar.Brand, null,
-                   E(Link, { to: `/albums/${this.props.albumId}` },
+                   E(Link, { to: `/album/${this.props.albumId}` },
                      E('i', { className: 'fa fa-fw fa-arrow-left'}),
                      ' Finish Editing')),
-                 E(Nav.Item, { className: 'ml-auto',
+                 E(Nav.Link, { className: 'ml-auto',
                                onClick: this.props.onAddText.bind(this) },
                    E('i', { className: 'fa fa-fw fa-quote-left'}),
                    ' Add Text'),
-                 E(Nav.Item, { onClick: this.props.onAddImage.bind(this) },
+                 E(Nav.Link, { onClick: this.props.onAddImage.bind(this) },
                    E('i', { className: 'fa fa-fw fa-image'}),
                    ' Add Image'))
     }
@@ -266,6 +266,7 @@ const AlbumContent = sortableContainer(({dragging, content, editingIndex, onText
                  } else if ( c.text ) {
                      return E(SortableAlbumText, { key: c.id, dragging,
                                                    text: c.text,
+                                                   index: c.itemIndex,
                                                    editing: editingIndex == c.itemIndex,
                                                    disabled: !editing,
                                                    onChange: (newContent) => {

@@ -87,6 +87,7 @@ class PhotoUpload {
 }
 
 const UPLOAD_KEEPALIVE = 1000;
+const UPLOADED_KEEPALIVE = 10000;
 class UploadIndicator extends react.Component {
     constructor () {
         super()
@@ -145,7 +146,8 @@ class PhotoApp extends react.Component {
 
         this.state = { uploads: [], slideshow: false,
                        searchTags: OrderedSet(),
-                       search: null }
+                       search: null,
+                       uploaded: Set() }
         this.uploadKey = 0
         this.galleryRef = react.createRef()
         this.navbarRef = react.createRef()
@@ -215,13 +217,19 @@ class PhotoApp extends react.Component {
             var newUploads =
                 this.state.uploads.filter((ul) => (ul.key != ulKey))
 
+            if ( newUploads.length == 0 )
+                setTimeout(() => {
+                    this.setState({uploaded: Set()})
+                }, UPLOADED_KEEPALIVE)
+
             this.setState({ uploads: newUploads })
         }, UPLOAD_KEEPALIVE)
 
         if ( photo !== null ) {
             if ( this.state.images.every((im) => (im.id != photo.id)) ) {
                 var newImages = this.state.images.unshift(photo)
-                this.setState({images: newImages, imageCount: this.state.imageCount + 1})
+                this.setState({images: newImages, imageCount: this.state.imageCount + 1,
+                               uploaded: this.state.uploaded.add(photo.id) })
             }
         }
     }
@@ -310,6 +318,13 @@ class PhotoApp extends react.Component {
         this.setState({addingToAlbum: selected})
     }
 
+    selectUploaded() {
+        var selected = this.galleryRef.current.getSelectedList()
+
+        this.galleryRef.current.setSelection(Set([...selected, ...this.state.uploaded.toArray() ]))
+        this.setState({uploaded: Set()})
+    }
+
     downloadSome(which) {
         var streamName, streamPromise
         if ( which.length == 0 ) return;
@@ -355,7 +370,7 @@ class PhotoApp extends react.Component {
     render() {
         const E = react.createElement;
 
-        var uploadsRemainingIndicator, ongoingUploads = [], addingToAlbum
+        var uploadsRemainingIndicator, ongoingUploads = [], addingToAlbum, selectUploadedIndicator
 
         if ( (this.state.uploads.length - MAX_UPLOAD_CONCURRENCY) > 0 )
             uploadsRemainingIndicator = [
@@ -372,6 +387,14 @@ class PhotoApp extends react.Component {
         if ( this.state.addingToAlbum ) {
             addingToAlbum = E(AddToAlbumModal, { images: this.state.addingToAlbum,
                                                  onDone: () => { this.setState({addingToAlbum: null}) } })
+        }
+
+        if ( this.state.uploaded.size > 0 ) {
+            selectUploadedIndicator = [
+                `${this.state.uploaded.size} uploaded. `,
+                E('a', { href: '#',
+                         onClick: () => { this.selectUploaded() } }, 'Select Uploaded')
+            ]
         }
 
         return E(Router, {},
@@ -417,9 +440,10 @@ class PhotoApp extends react.Component {
 
                    addingToAlbum,
 
-                   E('ul', {className: `ph-uploads-indicator ${this.state.uploads.length > 0 ? 'ph-uploads-indicator--active' : ''}`},
+                   E('ul', {className: `ph-uploads-indicator ${(this.state.uploads.length > 0) || this.state.uploaded.size > 0 ? 'ph-uploads-indicator--active' : ''}`},
                      'Uploading',
                      E('hr', {}),
+                     selectUploadedIndicator,
                      ongoingUploads.map((ul) => {
                          return E(UploadIndicator, {upload: ul, key: ul.key,
                                                     onComplete: (photo) => { this.uploadCompletes(ul.key, photo) }})
@@ -467,12 +491,14 @@ export function start() {
             if ( r.ok )
                 return r.json().then((perms) => {
                     globalPerms = Object.assign({}, globalPerms, perms)
+                    console.log("GEt user info", perms, globalPerms)
                 })
         }).then(doMount)
 }
 
+var container = document.createElement('div');
+document.body.appendChild(container);
+
 function doMount() {
-    var container = document.createElement('div');
-    document.body.appendChild(container);
     ReactDom.render(react.createElement(PhotoApp, { perms: globalPerms }), container);
 }

@@ -117,7 +117,7 @@ export default class IntrustdNavbar extends React.Component {
 
     render() {
         var status = []
-        var branding, shareLink
+        var branding, shareLink, createAlbumLink
 
         if ( typeof this.props.imgCount == 'number' )
             status.push(`${this.props.imgCount} images`)
@@ -133,6 +133,10 @@ export default class IntrustdNavbar extends React.Component {
                                       key: 'share' },
                           E('i', { className: 'fa fa-fw fa-share-alt' }),
                           E('span', { className: 'd-lg-none d-xl-inline' }, ' Share selected'))
+            createAlbumLink = E(Nav.Link, { onClick: () => this.props.onAddAlbum(),
+                                            key: 'create-album' },
+                                E('i', { className: 'fa fa-fw fa-book' }),
+                                ' Create Album')
         } else {
             branding = E('a', { href: '#', key: 'brand', className: 'image-brand' },
                          E('img', { src: 'images/icon.svg' }),
@@ -189,16 +193,16 @@ export default class IntrustdNavbar extends React.Component {
         }
 
         if ( this.props.perms.upload ) {
-            return E(Nav.Item, null,
-                     E(Form, { as: IntrustdForm, method: 'POST', encType: 'multipart/form-data',
-                               className: 'uk-navbar-item ph-upload ph-nav-icon',
-                               action: INTRUSTD_URL + "/upload", ref: this.uploadRef,
-                               onSubmit: (e) => { this.doUpload(e) }},
-                       E(UploadButton, { name: 'photo', elName: 'a',
-                                         className: 'ph-upload-btn btn btn-outline-secondary',
-                                         onUpload: (e) => { this.doUpload() } },
-                         E('span', {className: 'fa fa-upload'}),
-                         E('span', { className: 'd-xl-inline d-lg-none d-sm-inline' }, ' Upload'))))
+            uploadItem = E(Nav.Item, null,
+                           E(Form, { as: IntrustdForm, method: 'POST', encType: 'multipart/form-data',
+                                     className: 'uk-navbar-item ph-upload ph-nav-icon',
+                                     action: INTRUSTD_URL + "/upload", ref: this.uploadRef,
+                                     onSubmit: (e) => { this.doUpload(e) }},
+                             E(UploadButton, { name: 'photo', elName: 'a',
+                                               className: 'ph-upload-btn btn btn-outline-secondary',
+                                               onUpload: (e) => { this.doUpload() } },
+                               E('span', {className: 'fa fa-upload'}),
+                               E('span', { className: 'd-xl-inline d-lg-none d-sm-inline' }, ' Upload'))))
 
         }
 
@@ -258,6 +262,7 @@ export default class IntrustdNavbar extends React.Component {
                                            selectedTags: this.props.selectedTags })),
 
                          editAlbumsLink,
+                         createAlbumLink,
 
                          shareLink,
 
