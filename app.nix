@@ -31,7 +31,7 @@ let grpc-io-tools = ps: ps.buildPythonPackage rec {
       pname = "intrustd-photo";
       version = "0.1.0";
 
-      src = ./.; # dist/intrustd-photos-0.1.0.tar.gz; # ./.;
+      src = ./.; #dist/intrustd-photos-0.1.0.tar.gz; # ./.;
 
       doCheck = false;
 
@@ -84,6 +84,9 @@ in {
     { name = "upload";
       description = "Upload photos"; }
 
+    { name = "upload/guest";
+      description = "Upload photos as guest"; }
+
     { name = "view";
       description = "View photos"; }
 
@@ -97,7 +100,10 @@ in {
       description = "View All Albums";
       dynamic = true; }
 
-    { regex = "albums/view/(?P<album_Id>[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12})";
+    { name = "albums/(?P<album_Id>[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12})/upload/guest";
+      description = "Upload photos to album as a guest"; }
+
+    { regex = "albums/(?P<album_Id>[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12})/view";
       description = "View a particular album";
       dynamic = true; }
 

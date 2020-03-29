@@ -4,6 +4,7 @@ from datetime import datetime
 import werkzeug
 import flask
 import hashlib
+import glob
 
 M3U8_MIMETYPE = 'application/x-mpegURL'
 JPEG_PREVIEW_MIMETYPE = 'image/jpeg'
@@ -37,6 +38,19 @@ def get_photo_path(inner=None, absolute=False, size=None):
                              absolute=absolute)
     else:
         raise TypeError("Expected None or int/long for size")
+
+def get_photo_files(ph):
+    base = [ get_raw_photo_path(ph) ]
+
+    if ph.video:
+        hls_dir = get_photo_path("{}.hls".format(ph.id))
+        base.extend(glob.glob('{}/**'.format(hls_dir), recursive=True))
+
+    else:
+        ph_file = get_photo_path(ph.id)
+        base.extend(glob.glob('{}@*'.format(ph_file)))
+
+    return base
 
 def datetime_json(dt):
     return dt.strftime("%Y-%m-%dT%H:%M:%S")

@@ -1,19 +1,24 @@
 import React from 'react';
+import { toast } from 'react-toastify';
 import Hls from 'hls.js';
+import ReactCSSTransitionGroup from 'react-addons-css-transition-group';
+import MediumEditor from 'react-medium-editor';
+import Draggable from 'react-draggable';
+import sanitizeHtml from 'sanitize-html';
 
-import { mkTooltip } from './Util.js';
+import { PhotoItem, Placeholder, TextItem, Row } from './Model.js';
+import { mkTooltip, ErrorToast } from './Util.js';
 import { ImageTile } from './ImageTile.js';
+import Slideshow from './Slideshow.js';
+import { TEXT_VERTICAL_MARGIN, TEXT_HORIZONTAL_MARGIN, TEXT_PADDING } from './Layout.js';
 
 import { mintToken } from 'intrustd';
 import { Image, ImageHost, LoadingIndicator } from 'intrustd/src/react.js';
 import { INTRUSTD_URL, makeAbsoluteUrl } from './PhotoUrl.js';
-import { Album, Albums } from './Albums.js';
 
 import Moment from 'react-moment';
-import { Route, Link, withRouter } from 'react-router-dom';
+import { Route, Link, withRouter, Switch } from 'react-router-dom';
 import { MentionsInput, Mention } from 'react-mentions';
-import reactGallery from 'react-photo-gallery';
-import VisibilitySensor from 'react-visibility-sensor';
 import ReactResizeDetector from 'react-resize-detector';
 
 import Card from 'react-bootstrap/Card';
@@ -26,214 +31,15 @@ import Modal from 'react-bootstrap/Modal';
 import Button from 'react-bootstrap/Button';
 
 import './Gallery.scss';
+import 'medium-editor/dist/css/medium-editor.css';
+import 'medium-editor/dist/css/themes/default.css';
 
 import { Set } from 'immutable';
 
 const E = React.createElement;
-
-const NUM_NEXT_SLIDES_TO_PRELOAD = 5;
-
-class HlsPlayer extends React.Component {
-    constructor() {
-        super()
-
-        this.videoRef = React.createRef()
-    }
-
-    componentDidMount() {
-        if ( Hls.isSupported ) {
-            console.log("Will play video")
-            this.hls = new Hls({enableWorker: false})
-            this.hls.loadSource(this.props.src)
-            this.hls.attachMedia(this.videoRef.current)
-            this.hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                console.log("Manifest parsed", this.videoRef.current)
-                setTimeout(() => { this.videoRef.current.play() }, 1000);
-            })
-            this.hls.on(Hls.Events.ERROR, (event, data) => {
-                console.log("Error event", event, data)
-            })
-        }
-    }
-
-    componentDidUnmount() {
-        this.hls.stopLoad()
-    }
-
-    render() {
-        if ( Hls.isSupported ) {
-            return E('video', { key: 'video', ref: this.videoRef, controls: true })
-        } else
-            return 'Video not supported'
-    }
-}
-
-class SlideshowImpl extends React.Component {
-    constructor() {
-        super()
-
-        this.curSlide = null
-    }
-
-    componentDidMount() {
-        this.keyHandler = (e) => {
-            this.onKeyPress(e)
-        }
-        document.body.addEventListener('keydown', this.keyHandler)
-    }
-
-    componentWillUnmount() {
-        document.body.removeEventListener('keydown', this.keyHandler)
-    }
-
-    onKeyPress(e) {
-        var { history } = this.props
-
-        if ( e.key == 'ArrowLeft' ||
-             e.key == 'ArrowRight' ) {
-            var { prevImage, nextImage } = this.slide
-
-            if ( e.key == 'ArrowLeft' )
-                history.replace(prevImage)
-            else
-                history.replace(nextImage)
-        } else if ( e.key == 'Escape' ) {
-            history.goBack();
-        }
-    }
-
-    get slide() {
-        if ( this.curSlide !== null && this.curSlide.curImage.id == this.props.imageId &&
-             this.curSlide.images === this.props.images ) {
-            return this.curSlide
-        } else {
-            var curImageIx = this.props.images.findIndex((img) => (img.id == this.props.imageId))
-            if ( curImageIx >= 0 ) {
-                var curImage = this.props.images.get(curImageIx)
-                var prevImage, nextImage
-
-                if ( curImageIx > 0 )
-                    prevImage = this.props.images.get(curImageIx - 1).id
-
-                if ( curImageIx < (this.props.images.size - 1) )
-                    nextImage = this.props.images.get(curImageIx + 1).id
-
-                console.log("Check slide", this.props.canLoadMore, Math.abs(curImageIx - this.props.images.size))
-                if ( this.props.canLoadMore && Math.abs(curImageIx - this.props.images.size) < NUM_NEXT_SLIDES_TO_PRELOAD ) {
-                    // Check if there's more
-                    setTimeout(this.props.loadMore, 0)
-                }
-
-                if ( this.props.canLoadMore && nextImage === undefined ) {
-                    nextImage = 'loading'
-                }
-
-                var nextSlide = { curImage, prevImage, nextImage, images: this.props.images }
-                this.curSlide = nextSlide
-
-                return nextSlide
-            } else
-                return { }
-        }
-    }
-
-    render() {
-        var { curImage, prevImage, nextImage } = this.slide, imgComp
-
-        if ( curImage === null || curImage === undefined ) {
-            imgComp =
-                E('p', { className: '' },
-                  'This image was not found', E('br'),
-                  E(Link, { to: this.props.parentRoute }, 'Click here to go back'))
-        } else if ( curImage.type == 'video' ) {
-            imgComp = E(HlsPlayer, { src: `${INTRUSTD_URL}/image/${curImage.id}` })
-        } else {
-            imgComp =
-                E(ReactResizeDetector, { handleWidth: true, handleHeight: true,
-                                         children: ({width, height}) => {
-                                             var size = Math.ceil(Math.max(width, height))
-                                             size = Math.max(100, Math.round(Math.pow(2, Math.ceil(Math.log(size)/Math.log(2)))))
-                                             console.log("Request size", size);
-                                             return E(Image, { src: `${INTRUSTD_URL}/image/${curImage.id}?size=${size}` })
-                                         }})
-        }
-
-        var nextImageBtn, selectedClass
-
-        if ( nextImage ) {
-            if ( nextImage != 'loading' ) {
-                nextImageBtn = E(Link, { to: (nextImage ? this.props.makeImageRoute(nextImage) : "") },
-                                 E('i', { className: 'fa fa-fw fa-3x fa-chevron-right' }))
-            } else {
-                nextImageBtn = E('a', { 'href': '#', 'disabled': true }, E('i', { className: 'fa fa-fw fa-3x fa-chevron-right' }))
-            }
-        }
-
-        if ( this.props.selected.includes(curImage.id) )
-            selectedClass = 'ph-image-selector--selected';
-
-        return [
-            E(Navbar, { collapseOnSelect: true, expand: 'lg',
-                        bg: 'transparent', variant: 'transparent',
-                        fixed: 'top',
-                        className: 'slideshow-nav' },
-              E(Nav.Link, { as: Link,
-                            to: this.props.parentRoute},
-                E('i', { className: 'fa fa-fw fa-arrow-left' })),
-              E(Nav, { className: 'ml-auto' },
-                E(OverlayTrigger, { placement: 'bottom',
-                                    overlay: mkTooltip('Download', { className: 'slideshow-tooltip' }) },
-                  E(Nav.Link, { onClick: (e) => { e.preventDefault();
-                                                  this.props.onDownload([curImage.id]) } },
-                    E('i', { className: 'fa fa-fw fa-download' }))),
-                E(OverlayTrigger, { placement: 'bottom',
-                                    overlay: mkTooltip('Share', { className: 'slideshow-tooltip' }) },
-                  E(Nav.Link, { onClick: (e) => { e.preventDefault();
-                                                  this.props.onShare([curImage.id]) } },
-                    E('i', { className: 'fa fa-fw fa-share-alt' }))),
-                E(OverlayTrigger, { placement: 'bottom',
-                                    overlay: mkTooltip('Select', { className: 'slideshow-tooltip' }) },
-                  E(Nav.Link, { className: `ph-image-selector ${selectedClass}`,
-                                onClick: doSelect(this.props.gallery, curImage.id) },
-                    E('div', { className: 'ph-image-selector-check' },
-                      E('span', { className: 'ph-image-selector-box' })))))),
-
-            E('div', { className: 'slideshow' },
-              E(Link, { to: ( prevImage ? this.props.makeImageRoute(prevImage) : "" ),
-                        className: 'slideshow-arrow slideshow-left-arrow',
-                        style: { display: prevImage ? undefined : 'none' } },
-                E('i', { className: 'fa fa-chevron-left' })),
-              E(Link, { to: nextImage ? this.props.makeImageRoute(nextImage) : "",
-                        className: 'slideshow-arrow slideshow-right-arrow',
-                        style: { display: nextImage ? undefined : 'none' } },
-                E('i', { className: 'fa fa-chevron-right' })),
-              imgComp)
-        ];
-//                 E('nav', { className: 'uk-navbar-container uk-light uk-navbar-transparent',
-//                            'uk-navbar': 'uk-navbar' },
-//                   E('div', { className: 'uk-navbar-center' },
-//                     E('div', { className: `uk-navbar-item ${prevImage ? 'ss-nav-inactive' : ''}`,
-//                                'uk-tooltip': 'title: Previous Image' },
-//                       E(Link, { to: (prevImage ? this.props.makeImageRoute(prevImage) : "") },
-//                         E('i', { className: 'fa fa-fw fa-3x fa-chevron-left' }))),
-//                     E('div', { className: `uk-navbar-item ${nextImage ? 'ss-nav-inactive' : ''}`,
-//                                'uk-tooltip': 'title: Next Image' }, nextImageBtn),
-//                     E('div', { className: 'uk-navbar-item',
-//                                'uk-tooltip': 'title: Download' },
-//                       E('a', { href: '#',
-//                                onClick: (e) => { e.preventDefault();
-//                                                  this.props.onDownload([curImage.id]);
-//                                                } },
-//                         E('i', { className: 'fa fa-fw fa-3x fa-download' }))),
-//                     E('div', { className: 'uk-navbar-item',
-//                                'uk-tooltip': 'title: End Slideshow' },
-//                       E(Link, { to: this.props.parentRoute },
-//                         E('i', { className: 'fa fa-fw fa-3x fa-times-circle' })),
-//                      ))))
-    }
-}
-
-const Slideshow = withRouter(SlideshowImpl)
+const PHOTO_MARGIN = 2;
+const INSERTION_BAR_WIDTH = 40;
+const LOOK_AHEAD = 100;
 
 function doSelect(gallery, imgId) {
     return () => {
@@ -261,7 +67,6 @@ function ImageTileClosure({photo, index, margin}) {
                           selected: gallery.state.selected.contains(img.id),
                           showOverlay: true,
                           onSelect: doSelect(gallery, img.id),
-                          onShare: gallery.onShare.bind(gallery),
                           onActivated: () => {
                               history.push(`${match.url}slideshow/${img.id}`)
                           },
@@ -270,76 +75,140 @@ function ImageTileClosure({photo, index, margin}) {
                           } })
 }
 
-class SharingModal extends React.Component {
-    constructor() {
+class InsertionBar extends React.Component {
+    render() {
+        return E('div', { className: 'insertion-bar-container',
+                          style: { 'width': `${INSERTION_BAR_WIDTH}px`,
+                                   'height': `${this.props.height}px`,
+                                   'top': `${this.props.top}px`,
+                                   'left': `${this.props.left}px` } },
+                 E('div', { className: 'insertion-bar' }))
+    }
+}
+
+class AlbumText extends React.Component {
+    constructor(props) {
         super()
-        this.state = { }
+        this.state = { editing: false,
+                       text: this._sanitize(props.text) }
     }
 
-    componentDidMount() {
-        var promise
-        console.log("We are sharing", this.props.sharingWhat)
-        if ( this.props.sharingWhat == 'all' ) {
-            promise = this.shareAll()
-        } else if ( this.props.sharingWhat.album ) {
-            promise = this.shareAlbum(this.props.sharingWhat.album)
+    _sanitize(text) {
+        return sanitizeHtml(text, { allowedTags: [ 'b', 'i', 'a',
+                                                   'strong', 'em',
+                                                   'ul', 'ol', 'li',
+                                                 ] })
+    }
+
+    componentDidUpdate(oldProps) {
+        if ( this.props.text != oldProps.text ) {
+            this.setState({text: this._sanitize(this.props.text) })
+        }
+    }
+
+    startEdit() {
+        this.setState({editing: true, unsavedText: this.state.text})
+    }
+
+    onEdit(text) {
+        this.setState({unsavedText: text})
+    }
+
+    stopEdit() {
+        var sanitized = this._sanitize(this.state.unsavedText)
+        if ( this.state.unsavedText != this.props.text ) {
+            this.props.onChange(sanitized)
+        }
+        this.setState({editing: false, unsavedText: undefined, text: sanitized})
+    }
+
+    renderContent() {
+        var content, deleter
+        if ( this.state.editing ) {
+            content = E(MediumEditor, { className: 'content', text: this.state.text,
+                                        onChange: this.onEdit.bind(this) })
         } else
-            promise = this.share(this.props.sharingWhat)
+            content = E('div', { className: 'content',
+                                 onClick: this.startEdit.bind(this),
+                                 dangerouslySetInnerHTML: { __html: this.state.text } })
 
-        promise.then((link) => {
-            this.setState({sharingLink: link})
-        })
-    }
+        if ( this.props.allowDelete )
+            deleter = E('div', { className: 'album-text-deleter',
+                                 onClick: this.props.onDelete },
+                        E('i', { className: 'fa fa-fw fa-times' }))
 
-    shareAlbum(albumId) {
-        return mintToken([ `intrustd+perm://photos.intrustd.com/albums/view/${albumId}`,
-                           'intrustd+perm://admin.intrustd.com/guest' ],
-                         { format: 'query' })
-            .then((tok) => makeAbsoluteUrl(`#/album/${albumId}`, tok))
-    }
-
-    shareAll() {
-        return mintToken([ 'intrustd+perm://photos.intrustd.com/gallery',
-                           'intrustd+perm://photos.intrustd.com/view',
-                           'intrustd+perm://admin.intrustd.com/guest' ],
-                         { format: 'query' })
-            .then((tok) => makeAbsoluteUrl('#/', tok))
-    }
-
-    share(which) {
-        var perms = which.map((img) => `intrustd+perm://photos.intrustd.com/view/${img}`)
-
-        perms.push('intrustd+perm://photos.intrustd.com/gallery')
-        perms.push('intrustd+perm://admin.intrustd.com/guest')
-
-        return mintToken(perms,  { format: 'query' })
-                 .then((tok) => makeAbsoluteUrl('#/', tok))
+        return E('div', { className: `album-text ${this.props.dragging ? 'album-text--dragging' : ''}`,
+                            onBlur: this.stopEdit.bind(this),
+                            style: { top: `${this.props.top}px`,
+                                     left: `${this.props.left}px`,
+                                     width: `${this.props.width}px`,
+                                     height: `${this.props.height - 2 * (TEXT_VERTICAL_MARGIN - TEXT_PADDING)}px` } },
+                 deleter,
+                 content)
     }
 
     render() {
-        var body
-
-        if ( this.state.sharingLink ) {
-            body = [
-                E(InputGroup, {className: 'mb-3'},
-                  E(FormControl, { 'aria-describedby': 'copy-link',
-                                   defaultValue: this.state.sharingLink,
-                                   readOnly: true }),
-                  E(InputGroup.Append, { id: 'copy-link' },
-                    E(Button, {variant: 'primary'}, 'Copy')))
-            ]
+        if ( this.props.allowDrag ) {
+            var props = { onStart: this.props.onStartDrag,
+                          onStop: this.props.onStopDrag,
+                          onDrag: this.props.onDragging,
+                          cancel: 'div.content' }
+            if ( !this.props.dragging )
+                props.position = { x: 0, y: 0 }
+            return  E(Draggable, props,
+                      this.renderContent())
         } else
-            body = [
-                E('p', null, 'Making sharing link'),
-                E(LoadingIndicator)
-            ]
+            return this.renderContent()
+    }
+}
 
+class ImagePlaceholder extends React.Component {
+    constructor() {
+        super()
+        this.ref = React.createRef()
+        this.state = { loading: false }
+    }
 
-        return E(Modal, { centered: true, show: true,
-                          onHide: this.props.onDone },
-                 E(Modal.Header, { closeButton: true },
-                   E(Modal.Title, null, 'Share Photos')),
-                 E(Modal.Body, null, body))
+    componentDidMount() {
+        if ( this.props.doLoad )
+            this.startLoad()
+    }
+
+    componentWillUpdate(oldProps) {
+        if ( this.props.doLoad &&
+             this.props.doLoad != oldProps )
+            this.startLoad()
+    }
+
+    startLoad() {
+        if ( this.state.loading ) return
+
+        this.setState({loading: true})
+
+        var el = this.ref.current
+        var gallery = el.parentNode
+
+        var top = el.offsetTop,
+            left = el.offsetLeft
+
+        if ( top < gallery.scrollTop ) {
+            // Load last
+            this.props.model.loadBefore(this.props.nextImage,
+                                        { height: gallery.scrollTop - top })
+        } else {
+            var height = Math.min((gallery.scrollTop + gallery.clientHeight) - top, this.props.height)
+            // Load first
+            this.props.model.loadAfter(this.props.lastImage,
+                                       { height })
+        }
+    }
+
+    render() {
+        return E('div', { className: 'ph-placeholder',
+                          style: { height: `${this.props.height}px`,
+                                   top: `${this.props.top}px` },
+                          ref: this.ref },
+                 E(LoadingIndicator))
     }
 }
 
@@ -347,65 +216,116 @@ class GalleryImpl extends React.Component {
     constructor() {
         super()
         this.wasVisible = false
-        this.galleryRef = React.createRef()
+
+//        this.galleryRef = (newGallery) => {
+//            var currentGallery = this.galleryRef.current
+//            this.galleryRef.current = newGallery
+//            if ( currentGallery === null &&
+//                 newGallery !== null ) {
+//                this.scrollPositionChanges()
+//            }
+//        }
+        //        this.galleryRef.current = null
+
+        this.galleryRef = React.createRef();
+
+        this.unsubscribe = () => { }
+        this.gallery = this
         this.state = {
             slideshow: false,
             curSlideIx: 0,
-            selected: Set()
+            selected: Set(),
+            hasMore: false,
+            afterStart: 0,
+            beforeHeight: 0,
+            afterHeight: 0
         }
     }
 
-    render() {
-        var shareModal
-
-        if ( this.state.sharing ) {
-            shareModal = E(SharingModal, { sharingWhat: this.state.sharing,
-                                           onDone: () => { this.setState({sharing: undefined}) } })
-        }
-
-        return [
-            E(Route, { path: '/slideshow/:imageId', key: 'slideshow',
-                       render: this.renderSlideshow.bind(this) }),
-            E(Route, { path: '/album', key: 'albums', exact: true,
-                       render: this.renderAlbums.bind(this) }),
-            E(Route, { path: '/album/:albumId', key: 'album', exact: true,
-                       render: (thisProps) => { return this.renderAlbum(thisProps, false) } }),
-            E(Route, { path: '/album/:albumId/edit', key: 'edit-album',
-                       render: (thisProps) => { return this.renderAlbum(thisProps, true) } }),
-            E(Route, { path: '/', exact: true, key: 'gallery',
-                       render: this.renderGallery.bind(this) }),
-            shareModal
-        ]
+    get isAlbum() {
+        return false
     }
 
-    share(what, albumId) {
-        switch(what) {
-        case 'selected':
-            if ( this.state.selected.size > 0 )
-                this.onShare(this.state.selected.toArray())
-            break;
-        case 'album':
-            this.onShare({ 'album': albumId })
-            break;
-        case 'all':
-        default:
-            this.onShare('all');
+    get scrollPosY() {
+        return this.galleryRef.current.scrollTop
+    }
+
+    get height() {
+        return this.galleryRef.current.clientHeight
+    }
+
+    componentDidMount() {
+        this.subscribeGallery()
+    }
+
+    subscribeGallery() {
+        if ( this.props.model.started )
+            this.scrollPositionChanges()
+
+        var onLoadFn = this.scrollPositionChanges.bind(this)
+        this.props.model.addEventListener('load', onLoadFn)
+        this.props.model.addEventListener('starts', onLoadFn)
+        var oldModel = this.props.model
+        this.unsubscribe = () => {
+            this.setState({images: undefined})
+            oldModel.removeEventListener('load', onLoadFn)
+            oldModel.removeEventListener('starts', onLoadFn)
         }
     }
 
-    onShare(which) {
-        this.setState({sharing: which})
+    _getScrollBounds() {
+        if ( this.galleryRef.current === null )
+            return { minY: 0, maxY: 0 }
+
+        var minY = this.galleryRef.current.scrollTop - LOOK_AHEAD
+        var maxY = minY + this.galleryRef.current.clientHeight + (LOOK_AHEAD * 3)
+        return { minY, maxY }
+    }
+
+    scrollPositionChanges(e) {
+        if ( this.galleryRef.current === null )
+            return
+
+        var { minY, maxY } = this._getScrollBounds()
+        var height = this.props.model.height
+
+        this.props.model.layout(this.galleryRef.current.clientWidth,
+                                { margin: PHOTO_MARGIN })
+        var { images, beforeHeight, afterHeight, afterStart }
+            = this.props.model.getBetween(Math.max(minY, 0),
+                                          Math.min(maxY, height))
+        console.log("Got images", images)
+        this.setState({images, afterStart, beforeHeight, afterHeight})
+
+        if ( this.state.dragging )
+            this.updateDrag()
+    }
+
+    componentWillUnmount() {
+        this.unsubscribe()
+    }
+
+    componentDidUpdate(oldProps) {
+        if ( oldProps.model != this.props.model ) {
+            this.unsubscribe()
+            this.scrollToTop()
+            this.subscribeGallery()
+        }
+    }
+
+    scrollToTop() {
+        var gallery = this.galleryRef.current
+        if ( gallery ) {
+            gallery.scrollTop = 0
+        }
     }
 
     setSelection(selected) {
         this.setState({selected})
     }
 
-    selectAll() {
-        if ( this.props.images !== undefined ) {
-            var selected = Set(this.props.images.map((i) => i.id))
-            this.updateSelection(selected)
-        }
+    removeFromSelection(id) {
+        this.updateSelection(this.state.selected.delete(id))
     }
 
     updateSelection(selected) {
@@ -414,80 +334,193 @@ class GalleryImpl extends React.Component {
             this.props.onSelectionChanged(selected)
     }
 
-    onLoadIndicatorVisible(visible) {
-        if ( visible && this.props.hasMore && !this.wasVisible ) {
-            this.props.loadMore()
-            this.wasVisible = true
-        } else
-            this.wasVisible = false
-    }
-
     getSelectedList() {
         return this.state.selected.toArray()
     }
 
-    renderSlideshow(thisProps) {
-        var { images, match } = this.props
-
-        if ( images )
-            return E(Slideshow, { images, imageId: thisProps.match.params.imageId,
-                                  makeImageRoute: (id) => `${match.url}slideshow/${id}`,
-                                  canLoadMore: this.props.loadedCount < this.props.imageCount,
-                                  loadMore: this.props.loadMore,
-                                  onDownload: this.props.onDownload,
-                                  onShare: this.onShare.bind(this),
-                                  parentRoute: match.url,
-                                  gallery: this,
-                                  selected: this.state.selected
-                                  /* gallery: this */ })
-        else
-            return E('span', {className: 'fa fa-spin fa-large fa-circle-o-notch'})
+    onStartDrag(imageId, x, y) {
+        this.setState({dragging: imageId, dragStart: {x, y}})
     }
 
-    renderGallery () {
+    onStopDrag() {
+        if ( this.state.dragIndicator ) {
+            this.props.model.reorder(this.state.dragging, this.state.dragIndicator)
+                .catch((e) => {
+                    toast.error(E(ErrorToast, 'Could not move item'))
+                })
+        }
+        this.setState({dragging: undefined, dragPos: undefined, dragIndicator: undefined, dragStart: undefined})
+    }
+
+    onDrag(imageId, e, dragData) {
+        var {x,y} = dragData
+        this.setState({dragPos: {x: this.state.dragStart.x + x, y: this.state.dragStart.y + y}})
+        this.updateDrag()
+    }
+
+    updateDrag() {
+        var dragIndicator =  this.props.model.getItemAt(this.state.dragPos)
+//        console.log("Got drag Pos", this.state.dragPos)
+//        console.log("Drag indicator", dragIndicator)
+        this.setState({dragIndicator})
+    }
+
+    render() {
+        return E(Switch, null,
+                 E(Route, { path: `${this.props.parentRoute}/slideshow/:imageId`, key: 'slideshow',
+                            render: ({match, location, history}) =>
+                            E(Slideshow, { model: this.props.model,
+                                           selectedTags: this.props.selectedTags,
+                                           onDownload: this.props.onDownload,
+                                           onShare: this.props.onShare,
+                                           currentId: match.params.imageId,
+                                           selected: this.state.selected,
+                                           onSelect: (imgId) => doSelect(this, imgId),
+                                           parentRoute: `${this.props.parentRoute}/`,
+                                           makeImageRoute: (id) => `${this.props.parentRoute}/slideshow/${id}`,
+                                           key: 'slideshow' }) }),
+
+                 E(Route, { path: `${this.props.parentRoute}`, key: 'gallery',
+                            render: this.renderGallery.bind(this) }))
+    }
+
+    renderGallery({match, history}) {
         var gallery, galleryClass = '', hasSelection = !this.state.selected.isEmpty();
 
-        if ( this.props.images === undefined ) {
-            gallery = E('div', { className: 'ph-gallery-loading' }, E(LoadingIndicator))
-        } else if ( this.props.images.size == 0 ) {
-            gallery = E('div', { className: 'ph-gallery-empty-msg' }, 'No images')
+        if ( this.state.images === undefined ) {
+            gallery = E('div', { className: 'ph-gallery ph-gallery-loading' }, E(LoadingIndicator))
+        } else if ( this.state.images.size == 0 ) {
+            gallery = E('div', { className: 'ph-gallery ph-gallery-empty-msg' }, 'No images')
             galleryClass = 'ph-gallery-empty'
         } else {
-            var photos =
-                this.props.images.map((img) =>
-                    Object.assign({ src:img.id, key:img.id, gallery: this },
-                                  img)).toArray()
-
-            var visibilitySensor
-
-            if ( this.props.hasMore )
-                visibilitySensor = E(VisibilitySensor, { onChange: this.onLoadIndicatorVisible.bind(this) },
-                                     E('div', { className: 'ph-gallery-loading-indicator' },
-                                       E(LoadingIndicator)))
+            var loadingAny = false, left = PHOTO_MARGIN
 
             gallery =
-                [ E(reactGallery,
-                    { photos, margin: 2,
-                      ImageComponent: ImageTileClosure }),
-                  visibilitySensor ]
+                this.state.images.map(([ms, msAfter, im]) => {
+                    const renderInsertionBar = (itemId, thisLeft, top, renderItem) => {
+                        if ( this.state.dragging == itemId )
+                            return renderItem(thisLeft)
+
+                        if ( this.state.dragIndicator &&
+                             this.state.dragIndicator.before == itemId ) {
+                            var barLeft = thisLeft
+                            left += INSERTION_BAR_WIDTH
+                            return [ E(InsertionBar, { key: 'insertion-bar',
+                                                       height: ms.lastRowHeight, top,
+                                                       left: thisLeft }),
+                                     renderItem(thisLeft + INSERTION_BAR_WIDTH) ]
+                        } else if ( this.state.dragIndicator &&
+                                    this.state.dragIndicator.after == itemId ) {
+                            var barLeft = left
+                            left += INSERTION_BAR_WIDTH
+                            return [ renderItem(thisLeft),
+                                     E(InsertionBar, { key: 'insertion-bar',
+                                                       height: ms.lastRowHeight, top,
+                                                       left: barLeft }) ]
+                        } else
+                            return renderItem(thisLeft)
+                    }
+                    if ( im instanceof PhotoItem ) {
+                        var image = im.description
+                        var width = image.width * (ms.lastRowHeight / image.height)
+                        var thisLeft = left
+                        var top = ms.height - ms.lastRowHeight
+                        left += width + PHOTO_MARGIN
+                        var imageTile = (thisLeft) =>
+                            E(ImageTile, { key: `image-${im.id}`,
+                                           index: ms.count,
+
+                                           draggable: this.props.allowDrag,
+                                           onStartDrag: this.onStartDrag.bind(this, im.itemId, thisLeft, top),
+                                           onStopDrag: this.onStopDrag.bind(this, im.itemId, thisLeft, top),
+                                           onDragging: this.onDrag.bind(this, im.itemId),
+                                           dragging: this.state.dragging == im.itemId,
+
+                                           top,
+                                           height: ms.lastRowHeight,
+                                           width, left: thisLeft,
+
+                                           photo: image,
+                                           galleryNode: this.galleryRef,
+                                           selectedTags: this.props.selectedTags,
+                                           selectTag: this.props.selectTag,
+                                           selected: this.state.selected.contains(im.id),
+                                           showOverlay: true,
+                                           onSelect: doSelect(this, im.id),
+                                           onShare: () => {
+                                               this.props.onShare({photos: [im.id]})
+                                           },
+                                           onActivated: () => {
+                                               if ( this.props.enableSlideshow ) {
+                                                   history.push(`${this.props.parentRoute}/slideshow/${im.id}`)
+                                               }
+                                           },
+                                           onDescriptionSet: (newDesc, tags) => {
+                                               this.props.model.updateDescription(im.id, newDesc, tags)
+                                           }})
+
+                        return renderInsertionBar(im.itemId, thisLeft, top, imageTile)
+                    } else if ( im instanceof Placeholder ) {
+                        left = PHOTO_MARGIN
+                        var shouldLoad = !loadingAny
+                        loadingAny = true
+                        return E(ImagePlaceholder, { key: `placeholder-${ms.count}`,
+                                                     doLoad: loadingAny,
+                                                     model: this.props.model,
+                                                     count: im.count,
+                                                     top: ms.height,
+                                                     height: im.height,
+                                                     lastImage: ms.lastImage,
+                                                     nextImage: msAfter.firstImage })
+                    } else if ( im instanceof TextItem ) {
+                        left = PHOTO_MARGIN
+                        var top = ms.height + (TEXT_VERTICAL_MARGIN - TEXT_PADDING)
+                        var thisLeft = TEXT_HORIZONTAL_MARGIN - TEXT_PADDING
+                        var text = (thisLeft) =>
+                            E(AlbumText, { key: `text-${im.origId}`,
+                                           height: im.height, top,
+                                           left: thisLeft,
+                                           width: this.props.model.width - 2 * (TEXT_HORIZONTAL_MARGIN),
+                                           editing: this.state.editingText == im.id,
+                                           allowDrag: this.props.allowDrag,
+                                           onStartDrag: this.onStartDrag.bind(this, im.id, thisLeft, top),
+                                           onStopDrag: this.onStopDrag.bind(this, im.id, thisLeft, top),
+                                           onDragging: this.onDrag.bind(this, im.id),
+                                           dragging: this.state.dragging == im.id,
+                                           allowDelete: this.props.allowTextEdit,
+                                           onDelete: () => {
+                                               if ( this.props.allowTextEdit )
+                                                   this.props.model.removeAlbumItem(im.id)
+                                           },
+                                           onChange: (newText) => {
+                                               if ( this.props.allowTextEdit )
+                                                   this.props.model.setText(im.id, newText)
+                                           },
+                                           text: im.text })
+                        return renderInsertionBar(im.id, thisLeft, top, text)
+                    } else {
+                        if ( im instanceof Row )
+                            left = PHOTO_MARGIN
+                        return null
+                    }
+                }).filter((e) => {
+                    return (e !== undefined &&
+                            e !== null)
+                }).flat()
         }
 
-        return E('div', { className: `ph-gallery ${galleryClass}`, ref: this.galleryRef },
-                 gallery)
-    }
-
-    renderAlbum(thisProps, editing) {
-        var { match } = thisProps
-
-        return E(Album, { albumId: match.params.albumId,
-                          editing,
-                          selectedTags: this.props.selectedTags,
-                          selected: this.state.selected,
-                          key: `album-${match.params.albumId}` })
-    }
-
-    renderAlbums() {
-        return E(Albums, null)
+        return E('div', { className: `ph-gallery ${galleryClass}`, ref: this.galleryRef,
+                          onScroll: this.scrollPositionChanges.bind(this) },
+                 E(ReactResizeDetector,
+                   {handleWidth: true, handleHeight: true,
+                    onResize: this.scrollPositionChanges.bind(this)}),
+                 E('div', { className: 'ph-gallery-virtual-spacer',
+                            style: { height: `${this.state.beforeHeight}px`,
+                                     top: '0px' } }),
+                 gallery,
+                 E('div', { className: 'ph-gallery-virtual-spacer',
+                            style: { height: `${this.state.afterHeight}px`,
+                                     top: `${this.state.afterStart}px` } }))
     }
 }
 

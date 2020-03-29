@@ -1,6 +1,7 @@
 import './Photos.scss';
 
-import 'font-awesome/scss/font-awesome.scss';
+import '@fortawesome/fontawesome-free/scss/solid.scss';
+import '@fortawesome/fontawesome-free/scss/fontawesome.scss';
 import { install, mintToken } from 'intrustd';
 
 

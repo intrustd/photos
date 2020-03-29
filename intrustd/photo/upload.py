@@ -1,6 +1,8 @@
 from .app import app
 from .perms import perms, GalleryPerm, UploadPerm, ViewPerm
-from .schema import session_scope, Photo, PhotoTag, VideoFormat
+from .schema import session_scope, Photo, PhotoTag, VideoFormat, \
+    calc_counts_until, calc_counts_from, filter_photos_after, filter_photos_before, \
+    order_photos_default
 from .photos import _ensure_photo_attrs, _update_photo_dims, _update_photo_type
 from .video import DEFAULT_VIDEO_STREAMS, VideoFormat
 from .util import parse_json_datetime, datetime_sql, sha256_sum_file, \
@@ -17,6 +19,8 @@ from intrustd.tasks import schedule_command, get_scheduled_command_status
 from PIL import Image
 
 import magic
+
+MAX_LIMIT=100
 
 def _handle_video(uploaded):
     video_id = sha256_sum_file(uploaded.stream)
@@ -139,9 +143,18 @@ def upload(cur_perms=None):
     if request.method == 'GET':
         with session_scope() as session:
             tags = request.args.getlist('tag[]')
-            query = request.args.get('q')
+            albums = request.args.getlist('album[]')
+            count_until = request.args.getlist('countUntil[]')
+            count_from = request.args.getlist('countFrom[]')
+
+            queries = request.args.get('q[]')
+
             after = request.args.get('after_id')
             after_date = request.args.get('after_date')
+
+            before = request.args.get('before_id')
+            before_date = request.args.get('before_date')
+
             limit = request.args.get('limit')
 
             if after is not None:
@@ -151,9 +164,16 @@ def upload(cur_perms=None):
             if after_date is not None:
                 after_date = parse_json_datetime(after_date)
 
+            if before_date is not None:
+                before_date = parse_json_datetime(before_date)
+
             if (after is not None and after_date is None) or \
                (after is None and after_date is not None):
                 return jsonify({'error': 'both ?after and ?after_date must be set'}), 400
+
+            if (before is not None and before_date is None) or\
+               (before is None and before_date is not None):
+                return jsonify({'error': 'both ?before and ?before_date must be set'}), 400
 
             if limit is not None:
                 try:
@@ -164,34 +184,47 @@ def upload(cur_perms=None):
                 if limit < 0:
                     return jsonify({'error': 'negative limit'}), 400
 
-                limit = min(20, limit)
+                limit = min(MAX_LIMIT, limit)
             else:
-                limit = 20
+                limit = MAX_LIMIT
 
             photos = session.query(Photo)
 
-            if len(tags) > 0:
-                for tag in tags:
-                    photo_tags = aliased(PhotoTag)
-                    photos = photos.join(photo_tags, and_(photo_tags.tag == tag, photo_tags.photo_id == Photo.id))
+            for tag in tags:
+                photo_tags = aliased(PhotoTag)
+                photos = photos.join(photo_tags, and_(photo_tags.tag == tag, photo_tags.photo_id == Photo.id))
 
-            if query is not None:
-                filters = ["%{}%".format(kw) for kw in query.split(" ")]
-                photos = photos.filter(or_(Photo.description.like(f) for f in filters))
+            for album in albums:
+                album_items = aliased(AlbumItem)
+                photos = photos.join(album_items, and_(album_items.album_id==album, album_items.photo_id==Photo.id))
+
+            if queries is not None:
+                for query in queries:
+                    filters = ["%{}%".format(kw) for kw in query.split(" ")]
+                    photos = photos.filter(or_(Photo.description.like(f) for f in filters))
 
             total_photos = session.query(func.count(photos.subquery().c.id))[0][0]
 
+            if after is None and before is not None:
+                photos = order_photos_default(photos, reverse=True)
+                result_transform = reversed
+            else:
+                photos = order_photos_default(photos)
+                result_transform = lambda x: x
+
             if after is not None:
-                photos = photos.filter(or_(Photo.created_on < datetime_sql(after_date),
-                                           and_(Photo.created_on == datetime_sql(after_date), Photo.id > after)))
+                photos = filter_photos_after(photos, after, after_date)
+
+            if before is not None:
+                photos = filter_photos_before(photos, before, before_date)
 
             photos = photos.options(joinedload(Photo.tags)).\
                 options(joinedload(Photo.video_formats))
 
-            photos = photos.order_by(Photo.created_on.desc(), Photo.id.asc())
-
             if limit is not None:
                 photos = photos[:limit]
+
+            photos = list(result_transform(photos))
 
             ims = []
             for p in photos:
@@ -200,8 +233,13 @@ def upload(cur_perms=None):
                 if ViewPerm(photo_id=p.id) in cur_perms or perms.debug:
                     ims.append(p.to_json())
 
-            rsp = jsonify({ 'images': ims,
-                            'total': total_photos })
+            data = { 'images': ims,
+                     'total': total_photos}
+            if len(count_until) > 0:
+                data['countsUntil'] = calc_counts_until(photos, count_until, session)
+            if len(count_from) > 0:
+                data['countsFrom'] = calc_counts_from(photos, count_from, session)
+            rsp = jsonify(data)
             rsp.headers['Cache-Control'] = 'no-cache'
 
             return rsp

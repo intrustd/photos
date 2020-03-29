@@ -1,0 +1,21 @@
+.nav-underline .nav-link {
+    border-bottom: 3px solid gray;
+    box-sizing: border-box;
+
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+
+    color: $btn-link-disabled-color;
+
+    &.active {
+        border-bottom-color: $blue;
+        color: $blue;
+    }
+
+    .navbar & {
+        margin: 0 3px;
+        height:  64px;
+    }
+}

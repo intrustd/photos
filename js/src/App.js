@@ -1,29 +1,41 @@
 import 'bootstrap/scss/bootstrap.scss';
 
 import { install, mintToken, isPermalink } from 'intrustd';
+import { Image } from 'intrustd/src/react.js';
 
 import Gallery from './Gallery';
+import Slideshow from './Slideshow';
 import Navbar from './Navbar';
 import { AddToAlbumModal } from './Albums';
 import { INTRUSTD_URL, makeAbsoluteUrl } from './PhotoUrl.js';
+import { Photos } from './Model.js';
+import { Album, Albums } from './Albums.js';
+import { SharingModal } from './Sharing.js';
+import { mkSearch, SearchTermTypes } from './Search.js';
 
-import { Map, Set, OrderedSet, List } from 'immutable';
+import { Map, Set, OrderedSet, OrderedMap, List } from 'immutable';
 import react from 'react';
 import ReactDom from 'react-dom';
 import { HashRouter as Router,
          Route, Switch,
          Link } from 'react-router-dom';
 
+import { ToastContainer, toast } from 'react-toastify';
 import Progress from 'react-bootstrap/ProgressBar';
+
+import 'react-toastify/dist/ReactToastify.css';
 
 import './photos.svg';
 
 import streamsaver from 'streamsaver';
 
-const MAX_UPLOAD_CONCURRENCY = 10;
-
 if ( HOSTED_MITM )
     streamsaver.mitm = HOSTED_MITM;
+
+const UPLOAD_KEEPALIVE = 1000;
+const UPLOADED_KEEPALIVE = 10000;
+
+const E = react.createElement;
 
 export class CouldNotDownloadImageError {
     constructor(code) {
@@ -38,105 +50,27 @@ export class UnknownContentTypeError {
     }
 }
 
-class PhotoUpload {
-    constructor(key, formData) {
-        this.key = key
-        this.formData = formData
-        this.onProgress = (e) => {}
-        this.onComplete = (e) => {}
-
-        var photos = this.formData.getAll('photo')
-
-        if ( photos.length > 0 )
-            this.fileName = photos[0].name
-        else
-            this.fileName = "Photo"
-    }
-
-    start() {
-        this.req = new XMLHttpRequest()
-
-        this.req.addEventListener('load', () => {
-            this.onProgress({ error: false, complete: 100, total: 100 })
-
-            var photo = null
-            try {
-                photo = JSON.parse(this.req.responseText)
-            } catch (e) {
-                photo = null
-            }
-
-            this.onComplete(photo)
-        })
-
-        this.req.addEventListener('error', (e) => {
-            this.onProgress({ error: true, what: e })
-            this.onComplete(null)
-        })
-
-        this.req.addEventListener('progress', (e) => {
-            var progData = { error: false, complete: e.loaded }
-            if ( e.lengthComputable )
-                progData.total = e.total
-            this.onProgress(progData)
-        })
-
-        this.req.open('POST', INTRUSTD_URL + "/image", true)
-        this.req.send(this.formData)
+class PhotoDeleter extends react.Component {
+    render() {
+        if ( this.props.photosRemaining > 0 ) {
+            return E('div', { className: 'toast-content' },
+                     `Deleting ${this.props.total} photos`,
+                     E(Progress, { now: this.props.total - this.props.photosRemaining,
+                                   max: this.props.total,
+                                   className: 'progress-sm' }))
+        } else {
+            return E('div', { className: 'toast-content' },
+                     `Deleted ${this.props.total} photos`)
+        }
     }
 }
 
-const UPLOAD_KEEPALIVE = 1000;
-const UPLOADED_KEEPALIVE = 10000;
-class UploadIndicator extends react.Component {
-    constructor () {
-        super()
-
-        this.state = { error: false, total: 100, complete: 0 }
-    }
-
-    componentDidMount() {
-        this.props.upload.onProgress = (e) => this.onProgress(e)
-        this.props.upload.onComplete = (ph) => this.onComplete(ph)
-        this.props.upload.start()
-    }
-
-    onProgress(e) {
-        if ( e.error ) {
-            this.setState({error: true, errorString: e.what })
-        } else {
-            var newState = {}
-            if ( !e.hasOwnProperty('total') )
-                newState.total = null
-            else
-                newState.total = e.total
-
-            newState.complete = e.complete
-            newState.error = false
-            this.setState(newState)
-        }
-    }
-
-    onComplete(photo) {
-        this.props.onComplete(photo)
-    }
-
+class ImageDescriptionErrorToast extends react.Component {
     render() {
-        const E = react.createElement;
+        return [ E(Image, {src: `${INTRUSTD_URL}/image/${this.props.imageId}?size=64` }),
 
-        var progProps = { className: 'uk-progress' }
-        if ( this.state.total !== null ) {
-            progProps.now = this.state.complete;
-            progProps.max = this.state.total;
-        } else {
-            progProps.now = 1;
-            progProps.max = 1;
-            progProps.animated = true;
-        }
-
-        return  E('li', {className: 'ph-upload'},
-                  this.props.upload.fileName,
-                  E(Progress, progProps))
+                 E('p', { className: 'toast-content' },
+                   'Could not set description') ]
     }
 }
 
@@ -144,94 +78,67 @@ class PhotoApp extends react.Component {
     constructor() {
         super()
 
-        this.state = { uploads: [], slideshow: false,
+        this.state = { uploads: OrderedMap(),
+                       completedUploads: List(),
+                       erroredUploads: List(),
+
+                       slideshow: false,
                        searchTags: OrderedSet(),
-                       search: null,
-                       uploaded: Set() }
-        this.uploadKey = 0
+                       search: [] }
+
         this.galleryRef = react.createRef()
         this.navbarRef = react.createRef()
-    }
+        this.routerRef = react.createRef()
 
-    componentDidMount() {
-        this.updateImages()
-    }
-
-    updateImages() {
-        var search = this.state.searchTags.toArray()
-            .map((tag) => `tag[]=${encodeURIComponent(tag)}`)
-        var append = false
-
-        if ( this.state.search !== null )
-            search.push(`q=${encodeURIComponent(this.state.search)}`)
-
-        if ( this.state.images !== undefined && this.state.images.size > 0 ) {
-            search.push(`after_id=${this.state.images.get(this.state.images.size - 1).id}`)
-            search.push(`after_date=${this.state.images.get(this.state.images.size - 1).created}`)
-            append = true
-        }
-
-        search.push('limit=10')
-
-        if ( search.length > 0 )
-            search = `?${search.join('&')}`
-
-        fetch(`${INTRUSTD_URL}/image${search}`,
-              { method: 'GET', cache: 'no-store' })
-            .then((res) => res.json())
-            .then(({ images, total }) => {
-                images = List(images)
-                var hasMore = images.size == 10
-
-                if ( append )
-                    images = this.state.images.concat(images)
-
-                this.setState({ images, hasMore, imageCount: total })
-            })
+        this.photos = new Photos()
+        this.state.gallery = this.photos.mainGallery
     }
 
     uploadPhoto(fd) {
+        var albumId
+
+        if ( this.galleryRef.current &&
+             this.galleryRef.current.isAlbum )
+            albumId = this.galleryRef.current.albumId
+
         var photos = fd.getAll('photo')
-        var newUploads = [ ...this.state.uploads ];
         var ret = [];
+        var newUploads = this.state.uploads
 
         for ( var i in photos ) {
             var photo = photos[i]
-            var newFormData = new FormData()
-            newFormData.append('photo', photo)
 
-            var upload = new PhotoUpload(this.uploadKey, newFormData)
-            newUploads.push(upload)
-            ret.push(upload.onComplete)
+            console.log("Uploading", photo)
 
-            this.uploadKey += 1
+            var upload = this.photos.uploadPhoto(photo, albumId)
+            console.log("Uploader is ", upload)
+            newUploads = newUploads.set(upload.key, upload)
         }
+
+        if ( this.completedUploadTimer )
+            clearTimeout(this.completedUploadTimer)
 
         this.setState({ uploads: newUploads })
-
-        return ret
     }
 
-    uploadCompletes(ulKey, photo) {
+    uploadCompletes(upload) {
         setTimeout(() => {
-            var newUploads =
-                this.state.uploads.filter((ul) => (ul.key != ulKey))
+            this.setState( { uploads: this.state.uploads.delete(upload.key) } )
+            if ( upload.error )
+                this.setState( { erroredUploads: this.state.erroredUploads.push(upload) } )
+            else
+                this.setState( { completedUploads: this.state.completedUploads.push(upload.photo.id) } )
 
-            if ( newUploads.length == 0 )
-                setTimeout(() => {
-                    this.setState({uploaded: Set()})
+            if ( this.state.uploads.size == 0 ) {
+                if ( this.completedUploadTimer )
+                    clearTimeout(this.completedUploadTimer)
+                this.completedUploadTimer = setTimeout(() => {
+                    this.setState({completedUploads: List(),
+                                   erroredUploads: List() })
+                    delete this.completedUploadTimer
                 }, UPLOADED_KEEPALIVE)
-
-            this.setState({ uploads: newUploads })
-        }, UPLOAD_KEEPALIVE)
-
-        if ( photo !== null ) {
-            if ( this.state.images.every((im) => (im.id != photo.id)) ) {
-                var newImages = this.state.images.unshift(photo)
-                this.setState({images: newImages, imageCount: this.state.imageCount + 1,
-                               uploaded: this.state.uploaded.add(photo.id) })
             }
-        }
+        }, UPLOAD_KEEPALIVE)
     }
 
     modifyImage(imageId, fn) {
@@ -266,7 +173,7 @@ class PhotoApp extends react.Component {
                     this.modifyImage(imageId, (image) => Object.assign({}, image, {loading: false, description: newDesc }))
                 } else {
                     this.modifyImage(imageId, (image) => Object.assign({}, image, {loading: false, description: oldDesc }))
-                    // TODO pop up notification
+                    toast.error(E(ImageDescriptionErrorToast, { imageId }))
                 }
             })
     }
@@ -280,49 +187,107 @@ class PhotoApp extends react.Component {
     }
 
     selectTag(tag, include) {
-        var oldTags = this.state.searchTags, searchTags
+        var navbar = this.navbarRef.current
+        if ( navbar === null )
+            return
 
-        if ( !include )
-            searchTags = this.state.searchTags.delete(tag)
-        else
-            searchTags = this.state.searchTags.add(tag)
+        var newSearch
 
-        this.setState({searchTags})
+        if ( !include ) {
+            newSearch = navbar.removeTag(tag)
+        } else
+            newSearch = navbar.addTag(tag)
 
-        if ( !searchTags.equals(oldTags) ) {
-            this.setState({ images: undefined, imageCount: undefined, hasMore: true }, this.updateImages.bind(this))
-        }
+        this.onSearchChange(newSearch)
     }
 
-    doShare(what, albumId) {
-        this.galleryRef.current.share(what, albumId)
-    }
-
-    doSelectAll() {
-        if ( this.galleryRef.current !== undefined && this.state.images !== undefined ) {
-            if ( this.state.selectedCount == this.state.images.size )
-                this.doDeselectAll()
-            else {
-                this.galleryRef.current.selectAll()
-            }
+    doShare(what) {
+        if ( what == 'selected' ) {
+            var selected = this.galleryRef.current.gallery.getSelectedList()
+            what = { photos: selected }
         }
+        if ( what.hasOwnProperty("photos") &&
+             what.photos.length == 0 ) return
+        this.setState({sharingWhat: what, addingToAlbum: undefined})
     }
 
     doDeselectAll() {
-        this.galleryRef.current.updateSelection(Set())
+        this.galleryRef.current.gallery.updateSelection(Set())
+    }
+
+    deleteSelected() {
+        this.deleteSome(this.getSelected())
+    }
+
+    deleteSome(photos) {
+        if ( photos.length == 0 )
+            return
+
+        var total = photos.length
+        var deleterId = toast(E(PhotoDeleter, { photosRemaining: photos.length,
+                                                total }),
+                              { autoClose: false, closeOnClick: false, closeButton: false,
+                                draggable: false })
+        var continueDelete = () => {
+            if ( photos.length == 0 ) {
+                toast.update(deleterId,
+                             { render: E(PhotoDeleter, { photosRemaining: 0, total }),
+                               autoClose: 8000 })
+            } else {
+                var nextPhotoId = photos[0]
+                this.photos.deletePhoto(nextPhotoId)
+                    .catch(() => null)
+                    .then(() => {
+                        photos.shift()
+                        this.removeFromSelection(nextPhotoId)
+                        toast.update(deleterId,
+                                     { render: E(PhotoDeleter, { photosRemaining: photos.length, total }),
+                                       autoClose: false, closeOnClick: false, closeButton: false,
+                                       draggable: false })
+                        continueDelete()
+                    })
+            }
+        }
+
+        continueDelete()
     }
 
     addToAlbums() {
-        var selected = this.galleryRef.current.getSelectedList()
+        console.log("Got galleryRef", this.galleryRef.current)
+        var selected = this.getSelected()
 
-        this.setState({addingToAlbum: selected})
+        this.setState({addingToAlbum: selected, sharingWhat: undefined })
     }
 
     selectUploaded() {
-        var selected = this.galleryRef.current.getSelectedList()
+        var selected = this.getSelected()
 
-        this.galleryRef.current.setSelection(Set([...selected, ...this.state.uploaded.toArray() ]))
-        this.setState({uploaded: Set()})
+        this.galleryRef.current.gallery.setSelection(Set([...selected, ...this.state.completedUploads.toArray()]))
+    }
+
+    downloadSelected() {
+        this.downloadSome(this.getSelected())
+    }
+
+    onSearchChange(search) {
+        if ( search.length == 0 )
+            this.setState({gallery: this.photos.mainGallery, search})
+        else
+            this.setState({gallery: this.photos.searchGallery(mkSearch(search)), search})
+    }
+
+    getSelected() {
+        var gallery = this.galleryRef.current.gallery
+        if ( gallery ) {
+            return gallery.getSelectedList()
+        } else
+            return []
+    }
+
+    removeFromSelection(id) {
+        var gallery = this.galleryRef.current.gallery
+        if ( gallery )
+            gallery.removeFromSelection(id)
     }
 
     downloadSome(which) {
@@ -367,91 +332,95 @@ class PhotoApp extends react.Component {
         })
     }
 
+    get searchTags() {
+        return Set(this.state.search
+                   .filter((v) => (v.termType == SearchTermTypes.TAG))
+                   .map((v) => v.tag))
+    }
+
     render() {
-        const E = react.createElement;
-
-        var uploadsRemainingIndicator, ongoingUploads = [], addingToAlbum, selectUploadedIndicator
-
-        if ( (this.state.uploads.length - MAX_UPLOAD_CONCURRENCY) > 0 )
-            uploadsRemainingIndicator = [
-                E('hr'),
-                E('div', { className: 'uploads-remaining' },
-                  `${(this.state.uploads.length - MAX_UPLOAD_CONCURRENCY)} left to upload...`)
-            ]
-
-        if ( this.state.uploads.length <= MAX_UPLOAD_CONCURRENCY )
-            ongoingUploads = this.state.uploads
-        else
-            ongoingUploads = this.state.uploads.slice(0, MAX_UPLOAD_CONCURRENCY - 1)
+        var uploadsRemainingIndicator, addingToAlbum, sharing
 
         if ( this.state.addingToAlbum ) {
             addingToAlbum = E(AddToAlbumModal, { images: this.state.addingToAlbum,
                                                  onDone: () => { this.setState({addingToAlbum: null}) } })
         }
 
-        if ( this.state.uploaded.size > 0 ) {
-            selectUploadedIndicator = [
-                `${this.state.uploaded.size} uploaded. `,
-                E('a', { href: '#',
-                         onClick: () => { this.selectUploaded() } }, 'Select Uploaded')
-            ]
+        if ( this.state.sharingWhat ) {
+            sharing = E(SharingModal, { sharingWhat: this.state.sharingWhat,
+                                        onDone: () => { this.setState({sharingWhat: undefined}) } })
         }
 
-        return E(Router, {},
-                 E('div', null,
+        return E(Router, { ref: this.routerRef },
+                 E('div', { className: 'ph-photos-app' },
+                   E(ToastContainer, { autoClose: 8000}),
                    E(Navbar, { uploadPhoto: (fd) => this.uploadPhoto(fd),
+                               ongoingUploads: this.state.uploads,
+                               completedUploads: this.state.completedUploads,
+                               onUploadCompletes: this.uploadCompletes.bind(this),
+                               selectCompleted: this.selectUploaded.bind(this),
+
                                perms: this.props.perms,
                                visible: !this.state.slideshow,
-                               ref: this.navbarRef,
-                               searchTags: this.state.searchTags,
+                               wrappedComponentRef: this.navbarRef,
                                selectTag: this.selectTag.bind(this),
                                imgCount: this.state.imageCount !== undefined ? this.state.imageCount : undefined,
                                selectedCount: this.state.selectedCount,
                                allSelected: this.state.images !== undefined && this.state.selectedCount == this.state.images.size,
-                               selectedTags: this.state.searchTags,
-                               onSelectAll: this.doSelectAll.bind(this),
                                onDeselectAll: this.doDeselectAll.bind(this),
+                               onDelete: this.deleteSelected.bind(this),
                                onAddAlbum: this.addToAlbums.bind(this),
                                onShare: this.doShare.bind(this),
-                               downloadSelected: () => {
-                                   var gallery = this.galleryRef.current
-                                   if ( gallery ) {
-                                       this.downloadSome(gallery.getSelection().map((p) => p.id))
-                                   }
-                               },
+                               onDownloadSelected: this.downloadSelected.bind(this),
+                               onSearchChange: this.onSearchChange.bind(this),
                                shareLink: this.state.shareLink }),
 
-                   E(Route, { path: '/',
-                              render: ({match, location, history}) =>
-                              E(Gallery, {match, location, history, images: this.state.images,
-                                          perms: this.props.perms,
-                                          hasMore: this.state.hasMore,
-                                          loadMore: this.updateImages.bind(this),
-                                          imageCount: this.state.imageCount,
-                                          loadedCount: this.state.images ? this.state.images.size : null,
-                                          selectedTags: this.state.searchTags,
-                                          selectTag: this.selectTag.bind(this),
-                                          onStartSliedeshow: this.onStartSlideshow.bind(this),
-                                          onEndSlideshow: this.onEndSlideshow.bind(this),
-                                          onImageDescriptionChanged: this.onImageDescriptionChanged.bind(this),
-                                          onSelectionChanged: (sel) => this.setState({selectedCount: sel.size}),
-                                          onDownload: this.downloadSome.bind(this),
-                                          key: 'gallery', ref: this.galleryRef }) }),
+                   E(Switch, null,
+                     E(Route, { path: '/album', key: 'albums', exact: true,
+                                render: ({match, location, history}) =>
+                                E(Albums, null) }),
+
+
+                     E(Route, { path: '/album/:albumId/edit', key: 'edit-album', exact: true,
+                                render: ({match, location, history}) =>
+                                E(Album, { albumId: match.params.albumId,
+                                           perms: this.props.perms,
+                                           photos: this.photos,
+                                           editing: true,
+                                           wrappedComponentRef: this.galleryRef,
+                                           onSelectionChanged: (sel) => this.setState({selectedCount: sel.size}),
+                                           onDownload: this.downloadSome.bind(this),
+                                           selectTag: this.selectTag.bind(this),
+                                           selectedTags: this.searchTags,
+                                           key: `album-${match.params.albumId}` }) }),
+
+                     E(Route, { path: '/album/:albumId', key: 'album',
+                                render: ({match, location, history}) =>
+                                E(Album, { albumId: match.params.albumId,
+                                           wrappedComponentRef: this.galleryRef,
+                                           photos: this.photos,
+                                           onSelectionChanged: (sel) => this.setState({selectedCount: sel.size}),
+                                           onDownload: this.downloadSome.bind(this),
+                                           selectTag: this.selectTag.bind(this),
+                                           selectedTags: this.searchTags,
+                                           key: `album-${match.params.albumId}` })
+                              }),
+
+                     E(Route, { path: '/', key: 'gallery',
+                                render: ({match, location, history}) =>
+                                E(Gallery, {match, location, history, perms: this.props.perms,
+                                            parentRoute: '',
+                                            enableSlideshow: true,
+                                            model: this.state.gallery,
+                                            onShare: this.doShare.bind(this),
+                                            selectedTags: this.searchTags,
+                                            selectTag: this.selectTag.bind(this),
+                                            onSelectionChanged: (sel) => this.setState({selectedCount: sel.size}),
+                                            onDownload: this.downloadSome.bind(this),
+                                            key: 'index', ref: this.galleryRef }) })),
 
                    addingToAlbum,
-
-                   E('ul', {className: `ph-uploads-indicator ${(this.state.uploads.length > 0) || this.state.uploaded.size > 0 ? 'ph-uploads-indicator--active' : ''}`},
-                     'Uploading',
-                     E('hr', {}),
-                     selectUploadedIndicator,
-                     ongoingUploads.map((ul) => {
-                         return E(UploadIndicator, {upload: ul, key: ul.key,
-                                                    onComplete: (photo) => { this.uploadCompletes(ul.key, photo) }})
-                     }),
-                     uploadsRemainingIndicator
-                    )
-
-
+                   sharing
                   ))
     }
 }
@@ -488,6 +457,7 @@ export function start() {
     fetch(`${INTRUSTD_URL}/user/info`,
           { cache: 'no-store' })
         .then((r) => {
+            console.log("Got User Info", r)
             if ( r.ok )
                 return r.json().then((perms) => {
                     globalPerms = Object.assign({}, globalPerms, perms)

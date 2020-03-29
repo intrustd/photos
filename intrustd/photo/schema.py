@@ -1,16 +1,17 @@
 from sqlalchemy.ext.orderinglist import ordering_list
 from sqlalchemy import Column, Integer, String, DateTime, Boolean, \
-    ForeignKey, func, create_engine
-from sqlalchemy.orm import relationship, sessionmaker
+    ForeignKey, func, create_engine, or_, and_, event
+from sqlalchemy.orm import relationship, sessionmaker, backref
 from sqlalchemy.ext.declarative import declarative_base
 
 from contextlib import contextmanager
+from datetime import datetime
 
 from intrustd.tasks import get_scheduled_command_status
 
-from .util import get_photo_dir, datetime_json
+from .util import get_photo_dir, datetime_json, datetime_sql
 
-LATEST_VERSION = 6
+LATEST_VERSION = 7
 Base = declarative_base()
 
 class Photo(Base):
@@ -116,6 +117,9 @@ class Album(Base):
     def etag(self):
         return '{}-{}'.format(LATEST_VERSION, datetime_json(self.modified_on))
 
+    def touch(self):
+        self.modified_on = datetime.now()
+
     def to_json(self, include_items=False, include_summary=False):
         data = { 'id': self.album_id,
                  'name': self.name,
@@ -145,7 +149,7 @@ class AlbumItem(Base):
     updated = Column(DateTime, default=func.now(), onupdate=func.now())
 
     album = relationship(Album, primaryjoin=album_id == Album.album_id, back_populates='items')
-    photo = relationship(Photo, primaryjoin=photo_id == Photo.id)
+    photo = relationship(Photo, primaryjoin=photo_id == Photo.id, backref=backref('album_items', cascade='delete,delete-orphan'))
 
     def to_json(self):
         data = { 'id': self.id,
@@ -167,7 +171,7 @@ class Version(Base):
 
     version = Column(Integer, primary_key=True)
 
-engine = create_engine("sqlite:///" + get_photo_dir(".photos.db", absolute=True)) #, echo=True)
+engine = create_engine("sqlite:///" + get_photo_dir(".photos.db", absolute=True))
 
 Session = sessionmaker(bind=engine)
 
@@ -248,6 +252,11 @@ def do_migrate():
                                          updated TIMESTAMP NOT NULL )
             ''')
 
+        if version <= 6:
+            connection.execute('''
+              CREATE UNIQUE INDEX album_item_photo_index ON album_item ( album_id, photo_id )
+            ''')
+
         if version < latest_version:
             session.add(Version(version=latest_version))
         session.commit()
@@ -272,4 +281,51 @@ def session_scope():
     finally:
         session.close()
 
+def calc_counts_until(photos, counts_until, session):
+    return do_calc_distances(photos, counts_until, session,
+                             -1, filter_photos_after, filter_photos_before)
+
+def calc_counts_from(photos, counts_from, session):
+    print("Calc counts from", photos[0].id)
+    return do_calc_distances(photos, counts_from, session,
+                             0, filter_photos_before, filter_photos_after)
+
+def do_calc_distances(photos, references, session,
+                      photo_ix, filter_from_anchor, filter_to_reference):
+    if len(photos) == 0:
+        return {}
+
+    anchor = photos[photo_ix]
+    res = {}
+
+    for reference in references:
+
+        query = order_photos_default(session.query(Photo))
+        query = filter_from_anchor(query, anchor.id, anchor.created_on)
+
+        if reference != 'beginning' and reference != 'end':
+            ref_img = session.query(Photo).get(reference)
+            if ref_img is None:
+                continue
+
+            query = filter_to_reference(query, reference, ref_img.created_on)
+
+        res[reference] = query.count()
+
+    return res
+
+def filter_photos_after(photos, after, after_date):
+    return photos.filter(or_(Photo.created_on < datetime_sql(after_date),
+                             and_(Photo.created_on == datetime_sql(after_date), Photo.id > after)))
+
+def filter_photos_before(photos, before, before_date):
+    return photos.filter(or_(Photo.created_on > datetime_sql(before_date),
+                             and_(Photo.created_on==datetime_sql(before_date),
+                                  Photo.id < before)))
+
+def order_photos_default(photos, reverse=False):
+    if reverse:
+        return photos.order_by(Photo.created_on.asc(), Photo.id.desc())
+    else:
+        return photos.order_by(Photo.created_on.desc(), Photo.id.asc())
 

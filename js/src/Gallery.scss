@@ -1,3 +1,5 @@
+@import 'bootstrap/scss/bootstrap.scss';
+
 $slideshow-z-index: 100000;
 $indicator-label-color: #f8f8f8;
 $indicator-border-color: #ccc;
@@ -10,13 +12,23 @@ $indicator-border-color: #ccc;
     z-index: $slideshow-z-index + 10000;
 }
 
+.ph-photos-app {
+    height: 100vh;
+    width: 100vw;
+    display: flex;
+    flex-direction: column;
+}
+
 .ph-upload {
     margin: 0;
 }
 
+.ph-upload-btn-group {
+    margin-right: 10px;
+}
+
 .ph-upload-btn {
     cursor: pointer;
-    margin-right: 10px;
 }
 
 .ph-nav-icon {
@@ -28,6 +40,11 @@ $indicator-border-color: #ccc;
 
 .ph-nav-link-default {
     color: #555;
+}
+
+.ph-slide-img {
+    max-width: 100vw;
+    max-height: 100vh;
 }
 
 .ph-gallery-image {
@@ -60,9 +77,18 @@ $indicator-border-color: #ccc;
     100% { transform: translateX(100%); }
 }
 
+.ph-placeholder {
+    position: absolute;
+    width: 100vw;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+}
+
 .ph-gallery-image-card {
+    position: absolute;
+
     cursor: pointer;
-    margin: 10px;
     padding: 0;
 
     display: flex;
@@ -70,12 +96,16 @@ $indicator-border-color: #ccc;
     align-items: center;
     justify-content: center;
 
-    transition: opacity 1s;
+    transition: opacity 1s, top 0.7s, left 0.7s;
 
     overflow: hidden;
 
     box-sizing: border-box;
     box-shadow: none !important;
+
+    &.ph-gallery-image-card--dragging {
+        z-index: 1000;
+    }
 
     .intrustd-img-loading {
         background-color: #eee;
@@ -152,7 +182,12 @@ $indicator-border-color: #ccc;
 }
 
 .ph-gallery {
-    margin: 0 25px;
+    position: relative;
+    flex: 1;
+    overflow: auto;;
+    &::-webkit-scrollbar { width: 0 !important }
+    overflow: -moz-scrollbars-none;
+    -ms-overflow-style: none;
 }
 
 .ph-image-meta {
@@ -186,7 +221,7 @@ $indicator-border-color: #ccc;
         transition: opacity 0.2s;
     }
 
-    &:hover {
+    &:hover:not(.ph-image-description--disabled) {
         .ph-edit-btn {
             opacity: 1;
         }
@@ -202,6 +237,13 @@ $indicator-border-color: #ccc;
     .ph-image-description {
         border-color: black;
     }
+}
+
+.ph-gallery-virtual-spacer {
+    display: block;
+    width: 100vw;
+    position: absolute;
+    left: 0;
 }
 
 .ph-image-description__suggestions {
@@ -264,6 +306,10 @@ $indicator-border-color: #ccc;
         justify-content: center;
 
         box-sizing: border-box;
+
+        &.disabled {
+            color: gray;
+        }
 
         &:hover {
             opacity: 1;
@@ -337,7 +383,7 @@ $indicator-border-color: #ccc;
         &:before {
             font-size: 16pt;
             color: white;
-            font-family: FontAwesome;
+            font-family: 'Font Awesome 5 Free';
             content: '\f00c';
         }
     }
@@ -451,6 +497,9 @@ $indicator-border-color: #ccc;
 
 .ph-image-description__tag--selected, .ph-recent-tags__tag--selected {
     background-color: #207ce5;
+    color: white;
+
+    &:hover { color: white; }
 }
 
 .ph-gallery-loading {
@@ -474,4 +523,40 @@ video {
 .ph-recent-tags {
     max-width: 200px;
     white-space: normal;
+}
+
+.introduce-image { position: absolute }
+
+.introduce-image-leave {
+    opacity: 0;
+    display: none;
+    &.introduce-image-leave-active {
+        opacity: 0;
+        transition: opacity 100ms;
+    }
+}
+
+.introduce-image-enter {
+    opacity: 0;
+    transform: translateX(50px);
+    &.introduce-image-enter-active {
+        opacity: 1;
+        transform: translateX(0);
+        transition: transform 200ms, opacity 100ms;
+    }
+}
+
+.insertion-bar-container {
+    display: flex;
+    flex-direction: column;
+    padding: 0 15px;
+
+    position: absolute;
+    z-index: 500;
+
+    .insertion-bar {
+        width: 10px;
+        flex: 1;
+        background-color: $blue;
+    }
 }

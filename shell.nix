@@ -69,7 +69,7 @@ in pkgs.stdenv.mkDerivation {
        ps.kombu ps.pytest ps.requests ps.pillow intrustd-py ps.python_magic
        ps.zipstream ps.pylint ps.selenium
      ]))
-    ffmpeg chromedriver
+    ffmpeg chromedriver mediainfo
 
 #    run-android
 #    nodePackages.react-native-cli jdk

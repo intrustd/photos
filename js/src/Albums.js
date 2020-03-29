@@ -4,17 +4,17 @@ import ReactCSSTransitionGroup from 'react-addons-css-transition-group';
 
 import { INTRUSTD_URL } from './PhotoUrl.js';
 import { ImageTile } from './ImageTile.js';
+import Gallery from './Gallery.js';
+import { ErrorToast } from './Util.js'
 
 import uuidv4 from 'uuid/v4';
 
+import { Set } from 'immutable';
 import Moment from 'react-moment';
-import MediumEditor from 'react-medium-editor';
 import { Link, withRouter } from 'react-router-dom';
 import stringHash from 'string-hash';
 import { mintToken } from 'intrustd';
 import { Image, ImageHost, LoadingIndicator } from 'intrustd/src/react.js';
-import { sortableContainer, sortableElement } from 'react-sortable-hoc';
-import reactGallery from 'react-photo-gallery';
 import arrayMove from 'array-move';
 
 import Modal from 'react-bootstrap/Modal';
@@ -27,9 +27,7 @@ import Card from 'react-bootstrap/Card';
 import CardDeck from 'react-bootstrap/CardDeck';
 import Navbar from 'react-bootstrap/Navbar';
 import Nav from 'react-bootstrap/Nav';
-
-import 'medium-editor/dist/css/medium-editor.css';
-import 'medium-editor/dist/css/themes/default.css';
+import { toast } from 'react-toastify';
 
 import './Albums.scss';
 
@@ -46,7 +44,7 @@ class AlbumToolbar extends React.Component {
 
     render() {
         return E(Navbar, { collapseOnSelect: true, expand: 'lg',
-                           bg: 'light', variant: 'light', fixed: 'top',
+                           bg: 'light', variant: 'light', 'static': 'top',
                            className: 'album-navbar' },
                  E(Navbar.Brand, null,
                    E(Link, { to: `/album/${this.props.albumId}` },
@@ -59,6 +57,20 @@ class AlbumToolbar extends React.Component {
                  E(Nav.Link, { onClick: this.props.onAddImage.bind(this) },
                    E('i', { className: 'fa fa-fw fa-image'}),
                    ' Add Image'))
+    }
+}
+
+class AlbumToast extends React.Component {
+    render() {
+        return [ E('p', { className: 'toast-content' },
+                   'Added ',
+                   E('span', { className: 'added-photo-count' }, `${this.props.photoCount}`),
+                   ' to ',
+                   E('span', { className: 'album-name' }, this.props.name)),
+
+                 E('div', { className: 'toast-action' },
+                   E(Link, {to: `/album/${this.props.albumId}`},
+                     'View Album')) ]
     }
 }
 
@@ -79,10 +91,18 @@ class AddToAlbumModalImpl extends React.Component {
             })
     }
 
+    mkContent() {
+        return this.props.images.map((imageId) => { return { photo: imageId } })
+    }
+
+    popupNotification(name, albumId) {
+        toast(E(AlbumToast, { name, albumId, photoCount: this.props.images.length }))
+    }
+
     onNewAlbum() {
         if ( this.albumNameRef.current ) {
             var albumInfo = { name: this.albumNameRef.current.value,
-                              content: this.props.images.map((imageId) => { return { photo: imageId } }) }
+                              content: this.mkContent() }
 
             fetch(`${INTRUSTD_URL}/albums/`,
                   { method: 'POST',
@@ -93,15 +113,35 @@ class AddToAlbumModalImpl extends React.Component {
                         return r.json().then(({id}) => {
                             var { history }  = this.props
 
-                            history.push(`/album/${id}`)
+                            this.popupNotification(name, id)
                             this.props.onDone()
                         })
                     } else {
                         return r.text().then((message) => { this.setState({error: `Could not create album: ${message}`}) })
-                            .catch(() => { this.setState({error: "Could not create album" }) })
                     }
+                }).catch((e) => {
+                    this.setState({error: "Error creating album"})
                 })
         }
+    }
+
+    chooseAlbum(albumId, albumTitle) {
+        fetch(`${INTRUSTD_URL}/albums/${albumId}/end`,
+              { method: 'POST',
+                headers: { 'Content-type': 'application/json' },
+                body: JSON.stringify(this.mkContent()) })
+            .then((r) => {
+                if ( r.ok ) {
+                    var { history } = this.props
+                    this.popupNotification(albumTitle, albumId)
+                    this.props.onDone()
+                } else {
+                    return r.text().then((msg) => { this.setState({msg: `Could not create album: ${msg}`}) })
+                }
+            }).catch((e) => {
+                console.error(e)
+                this.setState({error: "Error adding items"})
+            })
     }
 
     render() {
@@ -123,7 +163,7 @@ class AddToAlbumModalImpl extends React.Component {
                      E(ListGroup.Item, { onClick: () => { this.setState({newAlbum: true}) } },
                        E('i', { className: 'fa fa-fw fa-plus', }), ' New Album'),
                      this.state.albums.map((album) => {
-                         return E(ListGroup.Item, { onClick: () => { this.selectItem(album.id) } }, album.name)
+                         return E(ListGroup.Item, { onClick: () => { this.chooseAlbum(album.id, album.name) } }, album.name)
                      }))
         }
 
@@ -151,140 +191,38 @@ class AddToAlbumModalImpl extends React.Component {
 
 export const AddToAlbumModal = withRouter(AddToAlbumModalImpl)
 
-const SortableImageTile = sortableElement(ImageTile)
-const ImageTileClosure = ({photo, index, margin}) => {
-    var album = photo.album, onImageDragStart, onImageDragEnd, style, className
-
-    if ( album.state.dragging ) {
-        className = 'ph-album-image-dragging'
-    }
-
-    return E(SortableImageTile,
-             { key: photo.id, margin,
-               disabled: !album.props.editing,
-               photo, index: photo.itemIndex,
-               galleryNode: photo.galleryRef,
-               selectedTags: album.props.selectedTags,
-               selectTag: album.props.selectTag,
-               selected: album.props.selected.contains(photo.id),
-               showOverlay: !album.props.editing,
-               className, onImageDragStart, onImageDragEnd,
-               imgStyle: style,
-               onSelect: () => { alert("TODO") },
-               onShare: () => { alert("TODO") },
-               onActivated: () => {
-                   console.error("TODO")
-               },
-               onDescriptionSet: (newDesc, tags) => {
-                   console.error("TODO onDescriptionSet")
-               } })
-}
-
-class AlbumGalleryImpl extends React.Component {
-    constructor() {
-        super()
-        this.state = { }
-    }
-
-    render() {
-        return E(reactGallery, { photos: this.props.gallery,
-                                 margin: 2,
-                                 ImageComponent: ImageTileClosure })
-
-    }
-}
-
-const AlbumGallery = withRouter(AlbumGalleryImpl)
-
-class AlbumTextImpl extends React.Component {
-    constructor() {
-        super()
-        this.state = { }
-        this.mainRef = React.createRef()
-    }
-
-    componentDidMount() {
-        if ( this.props.editing )
-            this.startEdit()
-    }
-
-    componentDidUpdate(prevProps) {
-        if ( !prevProps.editing && this.props.editing ) {
-            this.startEdit()
-        }
-    }
-
-    startEdit() {
-        var mainEditor = this.mainRef.current
-        var node = findDOMNode(mainEditor)
-        node.scrollIntoView()
-        node.focus()
-
-        mainEditor.medium.subscribe("blur", this.onBlur.bind(this))
-    }
-
-    onBlur() {
-        if ( this.state.unsavedChanges )
-            this.props.onChange(this.state.unsavedChanges)
-        this.setState({unsavedChanges: undefined})
-    }
-
-    onChange(newContent) {
-        this.setState({unsavedChanges: newContent})
-    }
-
-    render() {
-        if ( this.props.editing ) {
-            return E(MediumEditor, { tag: 'p', ref: this.mainRef,
-                                     text: this.props.text,
-                                     className: 'album-text album-text--editing',
-                                     onChange: this.onChange.bind(this),
-                                     options: {
-                                         cleanPastedHTML: true,
-                                         toolbar: { buttons: [ 'bold', 'italic', 'underline' ] }
-                                     } })
-        } else {
-            return E('p', { ref: this.mainRef, className: 'album-text',
-                            onClick: this.props.onStartEdit.bind(this) },
-                     this.props.text)
-        }
-    }
-}
-
-const AlbumText = withRouter(AlbumTextImpl)
-
-const SortableAlbumText = sortableElement((props) => {
-    return E(AlbumText, props)
-})
-
-const AlbumContent = sortableContainer(({dragging, content, editingIndex, onTextChange, onStartEdit, editing}) => {
-    return E('div', { className: 'album-content' },
-             content.map((c) => {
-                 if ( c.gallery ) {
-                     return E(AlbumGallery, { key: c.id, dragging,
-                                              gallery: c.gallery })
-                 } else if ( c.text ) {
-                     return E(SortableAlbumText, { key: c.id, dragging,
-                                                   text: c.text,
-                                                   index: c.itemIndex,
-                                                   editing: editingIndex == c.itemIndex,
-                                                   disabled: !editing,
-                                                   onChange: (newContent) => {
-                                                       onTextChange(c.itemIndex, newContent)
-                                                   },
-                                                   onStartEdit: () => {
-                                                       if ( editing )
-                                                           onStartEdit(c.itemIndex)
-                                                   }})
-                 } else
-                     return E('span', { key: c.id })
-             }))
-})
 
 class AlbumImpl extends React.Component {
     constructor() {
         super()
-        this.state = { loading: true }
+        this.unsubscribe = () => { }
+        this.galleryRef = React.createRef()
+        this.state = { loading: true, selected: Set() }
+    }
+
+    get isAlbum() {
+        return true
+    }
+
+    get albumId() {
+        return this.props.albumId
+    }
+
+    get gallery() {
+        return this.galleryRef.current
+    }
+
+    updateSelection(add, remove) {
+        if ( remove === undefined )
+            remove = Set()
+
+        if ( !(add instanceof Set) )
+            add = Set(add)
+
+        if ( !(remove instanceof Set) )
+            remove = Set(remove)
+
+        this.setState({selected: selected.union(add).subtract(remove)})
     }
 
     parseContent(content) {
@@ -326,20 +264,34 @@ class AlbumImpl extends React.Component {
     }
 
     componentDidMount() {
-        fetch(`${INTRUSTD_URL}/albums/${this.props.albumId}`)
-            .then((r) => {
-                if ( r.ok ) {
-                    return r.json().then((description) => {
-                        this.setContent(description.content)
-                        this.setState({loading: false, description})
-                    }).catch(() => {
-                        this.setState({loading: false, error: "Could not decode response"})
-                    })
-                } else if ( r.status == 404 ) {
-                    this.setState({loading: false, error: "Album does not exist"})
+        this.onAlbumIdChanged()
+    }
+
+    componentWillUpdate(oldProps) {
+        if ( oldProps.albumId != this.props.albumId ) {
+            this.unsubscribe()
+            this.onAlbumIdChanged()
+        }
+    }
+
+    onAlbumIdChanged() {
+        this.setState({ gallery: undefined, error: undefined, loading: true,
+                        images: null })
+        this.props.photos.album(this.props.albumId)
+            .then((gallery) => {
+                console.log("Loaded album", gallery)
+                if ( gallery === null ) {
+                    this.setState({loading: false,
+                                   error: "Album does not exist"})
                 } else {
-                    this.setState({loading: false, error: `Could not get album: ${r.status}`})
+                    this.setState({loading: false,
+                                   description: gallery.description,
+                                   gallery})
                 }
+            })
+            .catch((e) => {
+                console.error("Could not load gallery", e)
+                this.setState({loading: false, error: `Could not load gallery: ${e}`})
             })
     }
 
@@ -394,42 +346,13 @@ class AlbumImpl extends React.Component {
     }
 
     addText() {
-        var newText = { text: "New Text" }
-        this.addUnsavedItem(newText)
-    }
-
-    onTextChange(textIdx, newContent) {
-        var text = this.state.originalContent[textIdx], changePromise
-        if ( text.text === undefined )
+        var gallery = this.galleryRef.current
+        if ( gallery == null || !this.state.gallery )
             return
 
-        this.updateItemProps(textIdx, {text: newContent})
-        this.setState({editingIndex: undefined })
-
-        if ( text.id ) {
-            changePromise = fetch(`${INTRUSTD_URL}/albums/${this.props.albumId}/${text.id}`,
-                                  { method: 'PUT',
-                                    headers: { 'Content-type': 'application/json' },
-                                    body: JSON.stringify({text: newContent}) })
-        } else {
-            changePromise = fetch(`${INTRUSTD_URL}/albums/${this.props.albumId}/end`,
-                                  { method: 'POST',
-                                    headers: { 'Content-type': 'application/json' },
-                                    body: JSON.stringify({text: newContent}) })
-        }
-
-        changePromise.then((r) => {
-            if ( r.ok ) {
-                if ( text.id ) {
-                    return r.json().then(({id}) => {
-                        this.updateItemProps(textIdx, {id})
-                    })
-                }
-            } else
-                r.text().then((msg) => { this.popupAlert(`Could not change text: Bad Status: ${r.status} ${msg}`) })
-        }).catch((e) => {
-            this.popupAlert("Could not change text")
-        })
+        var { minY, maxY } = gallery._getScrollBounds()
+        var textId = this.state.gallery.addTextAround((minY + maxY)/2)
+        this.setState({editingText: textId})
     }
 
     updateItemProps(textIdx, props) {
@@ -443,27 +366,24 @@ class AlbumImpl extends React.Component {
         this.setContent(newContent)
     }
 
-    addUnsavedItem(item, index) {
-        var newContent = [ ...this.state.originalContent ], itemIndex
-
-        item = Object.assign({}, item)
-
-        if ( index === undefined ) {
-            itemIndex = newContent.length
-            newContent.push(item)
-        } else {
-            itemIndex = index
-            newContent.splice(index, 0, item)
-        }
-
-        item.itemIndex = itemIndex
-
-        this.setState({originalContent: newContent,
-                       content: this.parseContent(newContent),
-                       editingIndex: itemIndex })
+    addImage() {
     }
 
-    addImage() {
+    onShare() {
+        alert("TODO onShare album")
+    }
+
+    onNameChange(e) {
+        var newName = e.target.value
+        if ( newName != this.state.description.name ) {
+            this.state.gallery.setName(newName)
+                .catch((error) => {
+                    toast.error(E(ErrorToast, null, 'Could not set album name'))
+                })
+                .finally(() => {
+                    this.setState({description:this.state.gallery.description})
+                })
+        }
     }
 
     render() {
@@ -474,13 +394,18 @@ class AlbumImpl extends React.Component {
                      this.state.error)
         } else {
             var albumEditingClass = '', albumDraggingClass='', albumToolbar
+            var header
 
             if ( this.props.editing ) {
                 albumEditingClass = 'album--editing'
                 albumToolbar = E(AlbumToolbar, { albumId: this.props.albumId,
                                                  onAddText: this.addText.bind(this),
                                                  onAddImage: this.addImage.bind(this) });
-            }
+                header = E('input', { className: 'form-control h1', type: 'text', defaultValue: this.state.description.name,
+                                      onKeyDown: (e) => { if ( e.key == 'Enter' ) { this.onNameChange(e); } },
+                                      onBlur: this.onNameChange.bind(this) })
+            } else
+                header = E('h1', { className: 'album-title' }, this.state.description.name)
 
             if ( this.state.dragging )
                 albumDraggingClass = 'album--dragging'
@@ -488,18 +413,40 @@ class AlbumImpl extends React.Component {
             return [ albumToolbar,
                      E('div', { className: `album ${albumEditingClass} ${albumDraggingClass}`,
                                 key: 'album-content' },
-                       E('h1', { className: 'album-title' }, this.state.description.name),
-                       E('address', { className: 'album-info' },
-                         E(Moment, {format: 'YYYY-MM-DD'}, this.state.description.created)),
-                       E(AlbumContent, { dragging: this.state.dragging,
-                                         content: this.state.content,
-                                         editing: this.props.editing,
-                                         axis: "xy",
-                                         editingIndex: this.state.editingIndex,
-                                         onTextChange: this.onTextChange.bind(this),
-                                         onStartEdit: (idx) => { this.setState({editingIndex: idx}) },
-                                         onSortStart: () => { this.setState({dragging: true}) },
-                                         onSortEnd: ({oldIndex, newIndex}) => { this.setState({dragging: false}); this.reorder(oldIndex, newIndex); } })) ]
+                       E('header', null,
+                         E(Nav, { className: `album-actions ${this.props.editing ? 'album-actions--editing': ''}` },
+                           E(Nav.Link, { as: Link,
+                                         to: `/album/${this.props.albumId}/edit` },
+                             E('i', { className: 'fa fa-fw fa-edit' }),
+                             ' Edit Album')),
+                         header,
+                         E('address', { className: 'album-info' },
+                           E(Moment, {format: 'YYYY-MM-DD'}, this.state.description.created))),
+                       E(Gallery, { ref: this.galleryRef,
+                                    match: this.props.match,
+                                    history: this.props.history,
+                                    location: this.props.location,
+                                    perms: this.props.perms,
+                                    model: this.state.gallery,
+                                    parentRoute: `/album/${this.props.albumId}${this.props.editing ? '/edit': ''}`,
+                                    allowDrag: this.props.editing,
+                                    enableSlideshow: !this.props.editing,
+                                    allowTextEdit: this.props.editing,
+                                    onShare: this.onShare.bind(this),
+                                    selectedTags: this.props.selectedTags,
+                                    selectTag: this.props.selectTag,
+                                    onSelectionChanged: this.props.onSelectionChanged,
+                                    onDownload: this.props.onDownolad })) ]
+
+//                       E(AlbumContent, { dragging: this.state.dragging,
+//                                         content: this.state.content,
+//                                         editing: this.props.editing,
+//                                         axis: "xy",
+//                                         editingIndex: this.state.editingIndex,
+//                                         onTextChange: this.onTextChange.bind(this),
+//                                         onStartEdit: (idx) => { this.setState({editingIndex: idx}) },
+//                                         onSortStart: () => { this.setState({dragging: true}) },
+//                                         onSortEnd: ({oldIndex, newIndex}) => { this.setState({dragging: false}); this.reorder(oldIndex, newIndex); } })) ]
         }
     }
 }

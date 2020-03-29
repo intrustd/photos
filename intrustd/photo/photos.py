@@ -1,7 +1,9 @@
 from .app import app, no_store, NotModified
-from .perms import perms, CommentPerm, ViewPerm
-from .schema import session_scope, Photo, PhotoTag, VideoFormat
-from .util import get_raw_photo_path, get_photo_path, ZIP_MIMETYPE, M3U8_MIMETYPE
+from .perms import perms, CommentPerm, ViewPerm, UploadPerm
+from .schema import session_scope, Photo, PhotoTag, VideoFormat, \
+    calc_counts_until, calc_counts_from
+from .util import get_raw_photo_path, get_photo_path, get_photo_files, \
+    ZIP_MIMETYPE, M3U8_MIMETYPE
 
 from flask import jsonify, send_from_directory, send_file, request, abort, Response
 
@@ -62,6 +64,32 @@ def _update_photo_type(photo):
         mime_type = magic.from_file(path, mime=True)
         photo.mime_type = mime_type
 
+@app.route('/image/<image_hash>/meta', methods=['GET'])
+@perms.require(mkperm(ViewPerm, photo_id=Placeholder('image_hash')))
+@no_store
+def image_meta(image_hash=None, cur_perms=None):
+    if image_hash is None:
+        abort(404)
+
+    with session_scope() as session:
+        photo = session.query(Photo).get(image_hash)
+
+        if photo is None:
+            abort(404)
+
+        data = photo.to_json()
+
+        count_until = request.args.getlist('countUntil[]')
+        count_from = request.args.getlist('countFrom[]')
+
+        if len(count_until) > 0:
+            data['countsUntil'] = calc_counts_until([photo], count_until, session)
+
+        if len(count_from) > 0:
+            data['countsFrom'] = calc_counts_from([photo], count_from, session)
+
+        return jsonify(data)
+
 @app.route('/image/<image_hash>/description', methods=['GET', 'PUT'])
 @perms.require({ 'GET': mkperm(ViewPerm, photo_id=Placeholder('image_hash')),
                  'PUT': mkperm(CommentPerm, photo_id=Placeholder('image_hash')) })
@@ -72,7 +100,6 @@ def image_description(image_hash=None, cur_perms=None):
 
     with session_scope() as session:
         photo = session.query(Photo).get(image_hash)
-
         if photo is None:
             return abort(404)
 
@@ -134,13 +161,36 @@ def archive():
 
         return do_request()
 
-@app.route('/image/<image_hash>')
-@perms.require(mkperm(ViewPerm, photo_id=Placeholder('image_hash')))
+@app.route('/image/<image_hash>', methods=['GET', 'DELETE'])
+@perms.require({ 'GET': mkperm(ViewPerm, photo_id=Placeholder('image_hash')),
+                 'DELETE': UploadPerm })
 def image(image_hash=None, cur_perms=None):
-    if request.method == 'GET':
-        if image_hash is None:
-            return abort(404)
+    if image_hash is None:
+        return abort(404)
+    if request.method == 'DELETE':
+        with session_scope() as session:
+            existing = session.query(Photo).get(image_hash)
+            if existing is not None:
+                all_files = get_photo_files(existing)
+                for f in all_files:
+                    try:
+                        os.unlink(f)
+                    except FileNotFoundError:
+                        continue
+                    except IsADirectoryError:
+                        continue
+                    except:
+                        print("Could not remove file", f)
 
+                for item in existing.album_items:
+                    # onupdate isn't caled for bulk delete, so manually update the modified time
+                    item.album.touch()
+
+                session.delete(existing)
+
+            return jsonify({})
+
+    elif request.method == 'GET':
         size = request.args.get('size')
         if size is not None:
             try:
@@ -212,3 +262,4 @@ def image(image_hash=None, cur_perms=None):
 
                 else:
                     return abort(404)
+

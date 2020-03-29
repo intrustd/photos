@@ -31,7 +31,7 @@ def _validate_text(item, where=None):
         raise MalormedAlbum('Text content must be a string',
                             where=where)
 
-def _validate_content(content, session):
+def _validate_content(content, session, album=None):
     r = []
     for i, item in enumerate(content):
         if 'photo' in item:
@@ -44,7 +44,16 @@ def _validate_content(content, session):
                 raise MalformedAlbum('Photo provided does not exist: {}'.format(item['photo']),
                                      where='.content[{}].photo'.format(i))
 
-            r.append(AlbumItem(id=str(uuid.uuid4()), type='photo', photo=photo))
+            new_item = AlbumItem(id=str(uuid.uuid4()), type='photo', photo=photo)
+            if album is not None:
+                existing_item = session.query(AlbumItem) \
+                                       .filter(AlbumItem.photo==photo,
+                                               AlbumItem.album==album) \
+                                       .first()
+                if existing_item is not None:
+                    new_item = existing_item
+
+            r.append(new_item)
 
         elif 'text' in item:
             _validate_text(item, where='.content[{}].text'.format(i))
@@ -126,7 +135,7 @@ def album(album_id=None, cur_perms=None):
                 if not isinstance(data['name'], str):
                     raise MalformedAlbum('Name must be a string', where='.name')
 
-                album.name = name
+                album.name = data['name']
 
             for item in album.items:
                 if item.photo is not None:
@@ -180,6 +189,7 @@ def album_item(album_id=None, item_id=None, cur_perms=None):
             return jsonify(item.to_json())
 
         elif request.method == 'DELETE':
+            album = item.album
             session.delete(item)
             album.items.reorder()
             return jsonify({})
@@ -206,10 +216,10 @@ def album_end(album_id=None, cur_perms=None):
             return jsonify({})
 
         elif request.method == 'POST':
-            items = _validate_content([request.json], session)
-            item = items[0]
+            items = _validate_content(request.json, session, album=album)
 
-            album.items.append(item)
+            for item in items:
+                album.items.append(item)
 
             session.flush()
 
@@ -219,7 +229,7 @@ def album_end(album_id=None, cur_perms=None):
             session.delete(last_item)
             return jsonify({})
 
-@app.route('/albums/<album_id>/<item_id>/before', methods=['GET', 'PUT', 'DELETE'])
+@app.route('/albums/<album_id>/<item_id>/before', methods=['GET', 'PUT', 'POST', 'DELETE'])
 @perms.require({ 'GET': mkperm(ViewAlbumPerm, album_id=Placeholder('album_id')),
                  'POST': CreateAlbumsPerm,
                  'PUT': CreateAlbumsPerm,
@@ -256,10 +266,10 @@ def album_before_item(album_id=None, item_id=None, cur_perms=None):
             return jsonify({})
 
         elif request.method == 'POST':
-            items = _validate_content([request.json], session)
-            item = items[0]
+            items = _validate_content(request.json, session, album=album)
 
-            album.insert(item_rank, item)
+            for new_tem in reversed(items):
+                album.items.insert(item.rank, new_tem)
 
             session.flush()
 

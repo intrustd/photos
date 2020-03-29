@@ -2,6 +2,8 @@
 
 @import 'bootstrap/scss/bootstrap.scss';
 
+@import 'tabs-underline.scss';
+
 .navbar-brand img {
     width: 48px;
     height: 48px;
@@ -16,6 +18,11 @@
     z-index: $zindex-sticky - 1 !important;
 }
 
+.navbar {
+    height: 64px;
+    overflow: visible;
+}
+
 .nav-link, .nav-item {
     align-self: center;
 
@@ -24,31 +31,30 @@
 //    }
 }
 
-.ph-uploads-indicator {
-    position: fixed;
-    left: 0;
-    bottom: 0;
-    margin: 5px;
-    padding: 5px;
-    background-color: white;
-    border: 1px solid #ccc;
-    list-style: none;
-    min-width: 300px;
-    display: none;
+.navbar-slide-enter, .navbar-slide-leave {
+    position: absolute;
+    width: 100vw;
+    transition: opacity 0.2s, transform 0.2s;
 }
 
-.ph-uploads-indicator--active {
-    display: block;
+.navbar-slide-enter {
+    transform: translateY(-100px);
+    opacity: 0;
+
+    &.navbar-slide-enter-active {
+        opacity: 1;
+        transform: none;
+    }
 }
 
+.navbar-slide-leave {
+    transform: none;
+    opacity: 1;
 
-.ph-uploads-indicator li {
-    text-align: left;
-
-    animation: upload-fade-up;
-    animation-duration: 0.2s;
-    animation-fill-mode: forwards;
-    animation-iteration-count: 1;
+    &.navbar-slide-enter-active {
+        opacity: 0;
+        transform: translateY(100px);
+    }
 }
 
 .ph-nav-icon {
@@ -123,4 +129,32 @@
 .image-brand {
     text-decoration: none;
     color: inherit;
+}
+
+.what-is-being-shared, .expiry { font-weight: bold; }
+
+
+.upload-completed-item, .upload-indicator {
+    min-width: 300px;
+    font-size: 11pt;
+
+    .progress {
+        height: 0.3rem;
+    }
+}
+
+.progress-sm {
+    height: 0.3rem;
+}
+
+.upload-indicator {
+    margin: 0 3px;
+}
+
+.upload-select-completed {
+    float: right;
+}
+
+.search-bar {
+    width: 30em;
 }

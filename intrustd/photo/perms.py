@@ -1,6 +1,6 @@
 from intrustd.permissions import Permissions
 
-from .schema import session_scope, AlbumItem
+from .schema import session_scope, AlbumItem, Album
 
 perms = Permissions('intrustd+perm://photos.intrustd.com')
 
@@ -30,6 +30,15 @@ class ViewPerm(object):
                 if item is not None:
                     search.satisfy()
 
+@perms.permission('/upload/guest')
+class UploadGuestPerm(object):
+    def __init__(self, album_id=None):
+        self.album_id = album_id
+
+    def search(self, search):
+        for _ in search.search(UploadPerm):
+            search.satisfy()
+
 @perms.permission('/comment/<photo_id ~"[a-fA-F0-9]{64}">')
 class CommentPerm(object):
     def __init__(self, photo_id=None):
@@ -52,13 +61,25 @@ class ViewAlbumsPerm(object):
         for _ in search.search(CreateAlbumsPerm):
             search.satisfy()
 
-@perms.permission(r'/albums/view/<album_id ~"[0-9a-fA-F]{8}\\-[0-9a-fA-F]{4}\\-[0-9a-fA-F]{4}\\-[0-9a-fA-F]{4}\\-[0-9a-fA-F]{12}">')
+@perms.permission(r'/albums/<album_id ~"[0-9a-fA-F]{8}\\-[0-9a-fA-F]{4}\\-[0-9a-fA-F]{4}\\-[0-9a-fA-F]{4}\\-[0-9a-fA-F]{12}">/view')
 class ViewAlbumPerm(object):
     def __init__(self, album_id=None):
         self.album_id = album_id
 
     def search(self, search):
         for _ in search.search(ViewAlbumsPerm):
+            search.satisfy()
+
+@perms.permission(r'/albums/<album_id ~"[0-9a-fA-F]{8}\\-[0-9a-fA-F]{4}\\-[0-9a-fA-F]{4}\\-[0-9a-fA-F]{4}\\-[0-9a-fA-F]{12}">/upload/guest')
+class UploadAlbumAsGuestPerm(object):
+    def __init__(self, album_id=None):
+        self.album_id = album_id
+
+    def search(self, search):
+        for _ in search.search(UploadPerm):
+            search.satisfy()
+
+        for _ in search.search(CreateAlbumsPerm):
             search.satisfy()
 
 def image_thumbnail_gallery(imgs):
@@ -100,11 +121,11 @@ def basic_actions(search):
     if view:
         actions.append("view")
 
-    if comment:
-        actions.append("comment")
-
     if upload:
         actions.append("upload")
+
+    if comment:
+        actions.append("comment on")
 
     if len(actions) == 0:
         return [], set()
@@ -113,7 +134,24 @@ def basic_actions(search):
         actions[0] = actions[0].title()
         action_string = ", ".join("*{}*".format(action) for action in actions)
 
-        return [ { 'short': '{} on images'.format(action_string) } ], perms
+        return [ { 'short': '{} images'.format(action_string) } ], perms
+
+@perms.description
+def upload_guest_permission(search):
+    perms = set()
+
+    can_upload_as_guest_only = False
+    for p in search.search(UploadGuestPerm):
+        perms.add(p)
+        can_upload_as_guest_only = True
+        for _ in search.search(UploadPerm):
+            can_upload_as_guest_only = False
+            break
+
+    if can_upload_as_guest_only:
+        return [ { 'short': 'Upload images as a guest' } ], perms
+    else:
+        return [], perms
 
 @perms.description
 def view_albums_permission(search):
@@ -127,17 +165,38 @@ def view_albums_permission(search):
 
     if can_create:
         return [ { 'short': '*Create* and *view* albums' } ], perms
-    else:
+    elif len(perms) > 0:
         return [ { 'short': '*View* albums' } ], perms
+    else:
+        return [], perms
 
 @perms.description
 def view_album_permission(search):
     perms = set()
+    descs = []
 
-    for p in search(ViewAlbumPerm):
-        return p
+    with session_scope() as session:
+        for p in search.search(ViewAlbumPerm):
+            album_id = p.album_id
 
-    return [ { 'short': '*View* some albums' } ], perms
+            perms.add(p)
+            can_upload = False
+            for upload_p in search.search(UploadAlbumAsGuestPerm(album_id=album_id)):
+                perms.add(upload_p)
+                can_upload = True
+
+            album = session.query(Album).get(album_id)
+            if album is None:
+                continue
+
+            short =  '*View* the album \'{}\''.format(album.name)
+
+            if can_upload:
+                short = '{}, and *upload* photos as a guest'.format(short)
+
+            descs.append({ 'short': short })
+
+    return descs, perms
 
 @perms.description
 def view_comment_images_permission(search):
