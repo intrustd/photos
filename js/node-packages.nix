@@ -661,11 +661,15 @@ let
         sha512 = "6e1q1cnWP2RXD9/keSkxHScg508CdXqXWgWBaETNhyuBFz+kUZlKboh+ISK+bU++DmbHimVBrOz/zzPe0sZ3sQ==";
       };
     };
-    "intrustd-../../../js" = {
+    "intrustd-git://github.com/intrustd/js" = {
       name = "intrustd";
       packageName = "intrustd";
       version = "1.0.0";
-      src = ../../../js;
+      src = fetchgit {
+        url = "git://github.com/intrustd/js";
+        rev = "c60a689cff59ab798688bf463c0562331270a679";
+        sha256 = "c90c9f480e194ea397350455dd9e198eed4aae32325875afd476daabbc6fe212";
+      };
     };
     "invariant-2.2.4" = {
       name = "invariant";
@@ -1590,7 +1594,7 @@ let
       sources."ieee754-1.1.13"
       sources."immutable-3.8.2"
       sources."import-fresh-3.2.1"
-      (sources."intrustd-../../../js" // {
+      (sources."intrustd-git://github.com/intrustd/js" // {
         dependencies = [
           sources."event-target-shim-3.0.2"
         ];

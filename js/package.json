@@ -19,7 +19,7 @@
     "fingertree-js": "^1.0.2",
     "hls.js": "^0.12.4",
     "immutable": "^3.8.2",
-    "intrustd": "../../../js",
+    "intrustd": "intrustd/js",
     "lru-cache": "^5.1.1",
     "moment": "^2.24.0",
     "react": "^16.12.0",
