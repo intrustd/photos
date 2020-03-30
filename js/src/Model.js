@@ -389,7 +389,7 @@ export class GallerySeq {
 
     splitAtDate(whatDate, id) {
         const findFirstDate = (vl, vr) => {
-            return vl.lastDate.isSameOrAfter(whatDate)
+            return vl.lastDate !== null && vl.lastDate.isSameOrAfter(whatDate)
         }
         var searchRes = this._base.search(findFirstDate)
         var [before, match, after] = searchRes
