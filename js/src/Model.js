@@ -1596,7 +1596,6 @@ export class Photos {
                          { method: 'GET' })
                 .then((r) => {
                     if ( r.ok ) {
-                        console.log("Fetched album", id)
                         return r.json().then((content) => {
                             this._albums = this._albums.set(id, new AlbumModel(id,
                                                                                {content,

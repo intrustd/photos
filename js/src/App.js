@@ -123,8 +123,10 @@ class PhotoApp extends react.Component {
             this.setState( { uploads: this.state.uploads.delete(upload.key) } )
             if ( upload.error )
                 this.setState( { erroredUploads: this.state.erroredUploads.push(upload) } )
-            else
+            else {
+                console.log("Got upload", upload, upload.photo)
                 this.setState( { completedUploads: this.state.completedUploads.push(upload.photo.id) } )
+            }
 
             if ( this.state.uploads.size == 0 ) {
                 if ( this.completedUploadTimer )

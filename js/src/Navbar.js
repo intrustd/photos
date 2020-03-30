@@ -180,7 +180,6 @@ class Searcher extends React.Component {
             .then((r) => {
                 if ( r.ok ) {
                     return r.json().then((albums) => {
-                        console.log("Got albums", albums)
                         this.setState({albums})
                         this._remakeOptions()
                     })
@@ -480,7 +479,8 @@ class IntrustdNavbar extends React.Component {
     }
 
     renderOngoingUpload(upload) {
-        return E(UploadIndicator, { upload,
+        return E(UploadIndicator, { key: `upload-${upload.key}`,
+                                    upload,
                                     onComplete: () => {
                                         this.props.onUploadCompletes(upload)
                                     } })
