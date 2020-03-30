@@ -1,6 +1,8 @@
 import { INTRUSTD_URL } from './PhotoUrl.js';
 import { justifiedLayout } from './Layout.js';
 import { PhotoUpload } from './Uploads.js';
+import { toast } from 'react-toastify';
+import { ErrorToast } from './Util.js';
 
 import { EventTarget } from "event-target-shim";
 
@@ -406,7 +408,7 @@ export class GallerySeq {
 
         var allPossibilities = after.prepend(match)
         const findLastDate = (vl, vr) => {
-            return !vl.lastDate.isSame(whatDate)
+            return vl.lastDate !== null && !vl.lastDate.isSame(whatDate)
         }
         var [matching, lastMatch, afterAll] = allPossibilities.search(findLastDate)
 
@@ -1153,6 +1155,20 @@ export class AlbumModel extends BaseGalleryModel {
         }
     }
 
+    addToAlbum(content) {
+        fetch(`${INTRUSTD_URL}/albums/${this.albumId}/end`,
+              { method: 'POST',
+                headers: { 'Content-type': 'application/json' },
+                body: JSON.stringify(content) })
+            .then((r) => {
+                if ( r.ok ) {
+                    return this.start()
+                } else {
+                    return r.text().then((msg) => Promise.reject(msg))
+                }
+            })
+    }
+
     reorder(whichItem, where) {
         var position = this._getBefore(whichItem, where)
         if ( position )
@@ -1328,8 +1344,8 @@ export class AlbumModel extends BaseGalleryModel {
     }
 
     start() {
-        fetch(`${INTRUSTD_URL}/albums/${this.albumId}`,
-              { method: 'GET' })
+        return fetch(`${INTRUSTD_URL}/albums/${this.albumId}`,
+                     { method: 'GET' })
             .then((r) => {
                 if ( r.ok ) {
                     return r.json().then(this._loadContent.bind(this))
@@ -1354,9 +1370,13 @@ export class AlbumModel extends BaseGalleryModel {
         this.name = content.name
         this.created = content.created
 
+        super.start(this._formatContent(content.content))
+    }
+
+    _formatContent(content) {
         var newContent = []
 
-        content.content.map((i) => {
+        content.map((i) => {
             if ( i.hasOwnProperty("photo") ) {
                 this.imageCache.update(i.photo)
                 newContent.push(new AlbumItem(i, this.imageCache))
@@ -1367,7 +1387,7 @@ export class AlbumModel extends BaseGalleryModel {
             }
         })
 
-        super.start(newContent)
+        return newContent
     }
 
     updateDescription(imId, description) {
@@ -1609,7 +1629,9 @@ export class Photos {
     _addUploadToAlbum(albumId, e) {
         if ( e.photo ) {
             this.album(albumId).then((album) => {
-                album.start() // Refresh contents
+                return album.addToAlbum([{photo: e.photo.id}])
+            }).catch((e) => {
+                toast.error(E(ErrorToast, 'Could not add photos to album'))
             })
         }
     }

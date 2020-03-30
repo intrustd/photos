@@ -522,7 +522,7 @@ class IntrustdNavbar extends React.Component {
                                   ' completed',
                                   E('a', { className: 'upload-select-completed',
                                            href: '#',
-                                           onClick: this.props.selectCompleted },
+                                           onClick: (e) => { e.preventDefault(); this.props.selectCompleted(); } },
                                     'Select Completed'))
             }
 

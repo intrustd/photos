@@ -108,10 +108,7 @@ class PhotoApp extends react.Component {
         for ( var i in photos ) {
             var photo = photos[i]
 
-            console.log("Uploading", photo)
-
             var upload = this.photos.uploadPhoto(photo, albumId)
-            console.log("Uploader is ", upload)
             newUploads = newUploads.set(upload.key, upload)
         }
 
@@ -343,6 +340,7 @@ class PhotoApp extends react.Component {
 
         if ( this.state.addingToAlbum ) {
             addingToAlbum = E(AddToAlbumModal, { images: this.state.addingToAlbum,
+                                                 photos: this.photos,
                                                  onDone: () => { this.setState({addingToAlbum: null}) } })
         }
 

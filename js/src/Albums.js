@@ -126,21 +126,16 @@ class AddToAlbumModalImpl extends React.Component {
     }
 
     chooseAlbum(albumId, albumTitle) {
-        fetch(`${INTRUSTD_URL}/albums/${albumId}/end`,
-              { method: 'POST',
-                headers: { 'Content-type': 'application/json' },
-                body: JSON.stringify(this.mkContent()) })
-            .then((r) => {
-                if ( r.ok ) {
-                    var { history } = this.props
-                    this.popupNotification(albumTitle, albumId)
-                    this.props.onDone()
-                } else {
-                    return r.text().then((msg) => { this.setState({msg: `Could not create album: ${msg}`}) })
-                }
+        this.props.photos.album(albumId)
+            .then((model) => {
+                return model.addToAlbum(this.mkContent())
+            }).then(() => {
+                var { history } = this.props
+                this.popupNotification(albumTitle, albumId)
+                this.props.onDone()
             }).catch((e) => {
-                console.error(e)
-                this.setState({error: "Error adding items"})
+                console.error('Could not add photos to album', e)
+                this.setState({error: `Error adding items: ${e}`})
             })
     }
 
