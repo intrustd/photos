@@ -8,6 +8,8 @@ in stdenv.mkDerivation {
   name = "photos-static";
   src = ./js;
 
+  inherit nodeDeps;
+
   nativeBuildInputs = with pkgs; [ nodeDeps nodejs-8_x ];
 
   phases = [ "unpackPhase" "buildPhase" "installPhase" ];
