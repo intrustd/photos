@@ -43,8 +43,8 @@ class GalleryMonoid extends Monoid {
                  loadedCount: a.loadedCount + b.loadedCount,
                  count: a.count + b.count,
 
-                 lastDate: b.date || a.date,
-                 firstDate: a.date || b.date,
+                 lastDate: b.lastDate || a.lastDate,
+                 firstDate: a.firstDate || b.firstDate,
 
                  lastRowHeight: b.lastRowHeight || a.lastRowHeight,
                  lastImage: b.lastImage || a.lastImage,
