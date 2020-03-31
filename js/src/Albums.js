@@ -262,7 +262,7 @@ class AlbumImpl extends React.Component {
         this.onAlbumIdChanged()
     }
 
-    componentWillUpdate(oldProps) {
+    componentDidUpdate(oldProps) {
         if ( oldProps.albumId != this.props.albumId ) {
             this.unsubscribe()
             this.onAlbumIdChanged()
