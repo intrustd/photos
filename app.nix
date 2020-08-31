@@ -69,7 +69,7 @@ in {
     '';
   };
 
-  app.systemPackages = [ pkgs.ffmpeg photo-app ];
+  app.systemPackages = [ pkgs.ffmpeg photo-app pkgs.tcpdump ];
 
   app.environment = {
     INTRUSTDPHOTOS = "/intrustd/";
